@@ -33,8 +33,8 @@ var (
 	dlBusy   bool
 )
 
-func loadCatalog() (*ModelCatalog, error) {
-	b, err := manifestFS.ReadFile("manifests/models.json")
+func loadCatalog(manifestPath string) (*ModelCatalog, error) {
+	b, err := manifestFS.ReadFile(manifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func isGGUF(path string) bool {
 	return string(magic) == "GGUF"
 }
 
-func startModelDownload(rawURL string) error {
+func startModelDownload(rawURL, targetDir string) error {
 	dlMu.Lock()
 	if dlBusy {
 		dlMu.Unlock()
@@ -98,7 +98,7 @@ func startModelDownload(rawURL string) error {
 		return err
 	}
 
-	final := filepath.Join(modelDir, name)
+	final := filepath.Join(targetDir, name)
 	if _, err := os.Stat(final); err == nil {
 		dlMu.Unlock()
 		return fmt.Errorf("model %q sudah ada", name)
@@ -117,7 +117,7 @@ func startModelDownload(rawURL string) error {
 			dlMu.Unlock()
 		}()
 
-		if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		if err := os.MkdirAll(targetDir, 0o755); err != nil {
 			setProgress(Progress{Done: true, Err: err.Error()})
 			return
 		}
@@ -163,7 +163,7 @@ func cancelDownload() bool {
 // ---------- handler ----------
 
 func handleCatalog(w http.ResponseWriter, r *http.Request) {
-	c, err := loadCatalog()
+	c, err := loadCatalog("manifests/models.json")
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError,
 			map[string]any{"error": "katalog rusak"})
@@ -203,7 +203,7 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL); err != nil {
+	if err := startModelDownload(req.URL, modelDir); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return

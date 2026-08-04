@@ -73,8 +73,8 @@ func updateProgress(downloaded, total int64) {
 
 // ---------- manifest ----------
 
-func loadManifest() (*BackendManifest, error) {
-	b, err := manifestFS.ReadFile("manifests/backends.json")
+func loadManifest(path string) (*BackendManifest, error) {
+	b, err := manifestFS.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +109,8 @@ func pickBackend(m *BackendManifest, accel string) (*BackendEntry, error) {
 
 // ---------- pemasangan ----------
 
-func versionFile() string {
-	return filepath.Join(backendDir, ".version")
+func versionFileIn(dir string) string {
+	return filepath.Join(dir, ".version")
 }
 
 // fallbackToCPU dipanggil saat backend berakselerasi gagal jalan berulang
@@ -129,7 +129,7 @@ func fallbackToCPU() error {
 		return err
 	}
 
-	m, err := loadManifest()
+	m, err := loadManifest("manifests/backends.json")
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func fallbackToCPU() error {
 		return err
 	}
 
-	return installBackend(m, entry)
+	return installBackendInto(backendDir, m, entry)
 }
 
 // removeAllRetry mengulang os.RemoveAll beberapa kali dengan jeda. Berguna
@@ -154,11 +154,11 @@ func removeAllRetry(dir string, attempts int, delay time.Duration) error {
 	return err
 }
 
-func backendReady(m *BackendManifest, e *BackendEntry) bool {
-	if _, err := os.Stat(filepath.Join(backendDir, e.Entrypoint)); err != nil {
+func backendReadyIn(dir string, m *BackendManifest, e *BackendEntry) bool {
+	if _, err := os.Stat(filepath.Join(dir, e.Entrypoint)); err != nil {
 		return false
 	}
-	b, err := os.ReadFile(versionFile())
+	b, err := os.ReadFile(versionFileIn(dir))
 	if err != nil {
 		return false
 	}
@@ -167,7 +167,7 @@ func backendReady(m *BackendManifest, e *BackendEntry) bool {
 }
 
 func installedAccel() string {
-	b, err := os.ReadFile(versionFile())
+	b, err := os.ReadFile(versionFileIn(backendDir))
 	if err != nil {
 		return ""
 	}
@@ -179,49 +179,73 @@ func installedAccel() string {
 }
 
 func ensureBackend() error {
-	m, err := loadManifest()
+	return ensureBackendFor(backendDir, "manifests/backends.json", detectAccel())
+}
+
+// ensureBackendFor memastikan satu varian backend (LLM, TTS, dll) terpasang
+// di dir sesuai manifest yang diberikan. Dipakai ulang oleh semua jenis
+// backend supaya logic unduh/pasang tidak diduplikasi.
+func ensureBackendFor(dir, manifestPath, accel string) error {
+	m, err := loadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("manifest rusak: %w", err)
 	}
 
-	entry, err := pickBackend(m, detectAccel())
+	entry, err := pickBackend(m, accel)
 	if err != nil {
 		return err
 	}
 
-	if backendReady(m, entry) {
+	if backendReadyIn(dir, m, entry) {
 		fmt.Printf("backend sudah ada: %s (%s)\n", m.Version, entry.Accel)
 		return nil
 	}
 
-	return installBackend(m, entry)
+	return installBackendInto(dir, m, entry)
 }
 
-// installBackend mengunduh dan memasang satu varian backend.
-func installBackend(m *BackendManifest, entry *BackendEntry) error {
+// installBackendInto mengunduh dan memasang satu varian backend ke dir.
+// Rilis ada yang berupa arsip zip (llama.cpp) dan ada yang langsung berupa
+// executable tunggal (koboldcpp) — keduanya ditangani di sini.
+func installBackendInto(dir string, m *BackendManifest, entry *BackendEntry) error {
 	fmt.Printf("mengunduh backend %s (%s)...\n", m.Version, entry.Accel)
 	setProgress(Progress{Active: true, Label: "Mengunduh backend " + m.Version})
 
-	if err := os.MkdirAll(backendDir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 
-	tmp := filepath.Join(backendDir, "backend.zip.part")
+	isArchive := strings.HasSuffix(strings.ToLower(entry.URL), ".zip")
+	tmp := filepath.Join(dir, "backend.download.part")
 	if err := download(entry.URL, tmp); err != nil {
 		setProgress(Progress{Err: err.Error(), Done: true})
 		return err
 	}
 
-	setProgress(Progress{Active: true, Label: "Mengekstrak...", Percent: 100})
-	if err := unzip(tmp, backendDir, entry.Entrypoint); err != nil {
-		setProgress(Progress{Err: err.Error(), Done: true})
-		return err
+	if isArchive {
+		setProgress(Progress{Active: true, Label: "Mengekstrak...", Percent: 100})
+		if err := unzip(tmp, dir, entry.Entrypoint); err != nil {
+			setProgress(Progress{Err: err.Error(), Done: true})
+			return err
+		}
+		os.Remove(tmp)
+	} else {
+		// Rilis berupa executable tunggal — langsung jadi entrypoint,
+		// tidak perlu diekstrak.
+		target := filepath.Join(dir, entry.Entrypoint)
+		if err := os.Rename(tmp, target); err != nil {
+			setProgress(Progress{Err: err.Error(), Done: true})
+			return err
+		}
+		if err := os.Chmod(target, 0o755); err != nil {
+			setProgress(Progress{Err: err.Error(), Done: true})
+			return err
+		}
 	}
-	os.Remove(tmp)
 
 	// Catat versi sekaligus varian, supaya kita tahu apa yang terpasang.
 	stamp := m.Version + "\n" + entry.Accel
-	if err := os.WriteFile(versionFile(), []byte(stamp), 0o644); err != nil {
+	if err := os.WriteFile(versionFileIn(dir), []byte(stamp), 0o644); err != nil {
 		return err
 	}
 

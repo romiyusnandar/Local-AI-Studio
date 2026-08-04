@@ -5,6 +5,7 @@
 
 # Backend inference — diunduh terpisah, ratusan MB
 /app/backend/
+/app/tts-backend/
 
 # Bobot model — bisa puluhan GB
 /app/models/

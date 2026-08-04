@@ -1,0 +1,11 @@
+{
+  "models": [
+    {
+      "name": "Kokoro TTS (no espeak, Q8)",
+      "file": "Kokoro_no_espeak_Q8.gguf",
+      "url": "https://huggingface.co/mmwillet2/Kokoro_GGUF/resolve/main/Kokoro_no_espeak_Q8.gguf",
+      "sizeBytes": 206432608,
+      "note": "Ringan, tidak butuh espeak-ng eksternal. Cocok untuk mencoba."
+    }
+  ]
+}

@@ -49,16 +49,29 @@ func main() {
 		fmt.Printf("belum ada model — taruh file .gguf di %s/\n", modelDir)
 	}
 
+	if err := ensureTTSBackend(); err != nil {
+		fmt.Println("gagal menyiapkan backend TTS:", err)
+		fmt.Println("aplikasi tetap jalan — cek koneksi lalu restart")
+	}
+
+	if models := listTTSModels(); len(models) > 0 {
+		setTTSActiveModel(models[0])
+	} else {
+		fmt.Printf("belum ada model TTS — taruh file .gguf di %s/\n", ttsModelDir)
+	}
+
 	sinyal := make(chan os.Signal, 1)
 	signal.Notify(sinyal, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sinyal
 		fmt.Println("\nmenghentikan mesin AI...")
 		shutdown(getProcess())
+		shutdownTTS(getTTSProcess())
 		os.Exit(0)
 	}()
 
 	go startEngine()
+	go startTTSEngine()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
@@ -72,6 +85,15 @@ func main() {
 	http.HandleFunc("/api/progress", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, getProgress())
 	})
+
+	http.HandleFunc("/api/tts/status", handleTTSStatus)
+	http.HandleFunc("/api/tts/speak", handleTTSSpeak)
+	http.HandleFunc("/api/tts/models", handleTTSModelsList)
+	http.HandleFunc("/api/tts/models/select", handleTTSSelectModel)
+	http.HandleFunc("/api/tts/catalog", handleTTSCatalog)
+	http.HandleFunc("/api/tts/models/download", handleTTSDownloadModel)
+	http.HandleFunc("/api/tts/models/cancel", handleCancelDownload)
+	http.HandleFunc("/api/tts/models/delete", handleTTSDeleteModel)
 
 	fmt.Println("buka http://localhost:1420")
 	if err := http.ListenAndServe(uiAddr, nil); err != nil {
@@ -352,12 +374,13 @@ func waitForReady() error {
 	return fmt.Errorf("mesin tidak merespons dalam 60 detik")
 }
 
-func shutdown(cmd *exec.Cmd) {
+// killProcess menghentikan proses lewat OS tanpa menyentuh flag "force
+// shutdown" milik mesin manapun — dipakai ulang oleh shutdown() (LLM) dan
+// shutdownTTS() (TTS) supaya kedua mesin punya state independen.
+func killProcess(cmd *exec.Cmd) bool {
 	if cmd == nil || cmd.Process == nil {
-		return
+		return false
 	}
-
-	setForceShutdown(true)
 
 	if runtime.GOOS == "windows" {
 		exec.Command("taskkill", "/PID",
@@ -367,6 +390,13 @@ func shutdown(cmd *exec.Cmd) {
 	}
 
 	time.Sleep(200 * time.Millisecond)
+	return true
+}
+
+func shutdown(cmd *exec.Cmd) {
+	if killProcess(cmd) {
+		setForceShutdown(true)
+	}
 }
 
 // ---------- akses variabel bersama ----------

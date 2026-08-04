@@ -1,0 +1,23 @@
+{
+  "version": "v1.118.1",
+  "backends": [
+    {
+      "os": "windows",
+      "accel": "cpu",
+      "url": "https://github.com/LostRuins/koboldcpp/releases/download/v1.118.1/koboldcpp-nocuda.exe",
+      "entrypoint": "koboldcpp.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "cpu",
+      "url": "https://github.com/LostRuins/koboldcpp/releases/download/v1.118.1/koboldcpp-linux-x64-nocuda",
+      "entrypoint": "koboldcpp"
+    },
+    {
+      "os": "darwin",
+      "accel": "cpu",
+      "url": "https://github.com/LostRuins/koboldcpp/releases/download/v1.118.1/koboldcpp-mac-arm64",
+      "entrypoint": "koboldcpp"
+    }
+  ]
+}
