@@ -348,7 +348,7 @@ func handleSTTDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, sttModelDir, ".bin", isWhisperModel); err != nil {
+	if err := startModelDownload(req.URL, sttModelDir, []string{".bin"}, isWhisperModel); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return

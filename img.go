@@ -50,7 +50,8 @@ func listImgModels() []string {
 		if e.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(strings.ToLower(e.Name()), ".gguf") {
+		name := strings.ToLower(e.Name())
+		if strings.HasSuffix(name, ".gguf") || strings.HasSuffix(name, ".safetensors") {
 			out = append(out, e.Name())
 		}
 	}
@@ -354,7 +355,7 @@ func handleImgDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, imgModelDir, ".gguf", isGGUF); err != nil {
+	if err := startModelDownload(req.URL, imgModelDir, []string{".gguf", ".safetensors"}, isValidImageModel); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return

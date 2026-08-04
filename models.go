@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -47,7 +50,7 @@ func loadCatalog(manifestPath string) (*ModelCatalog, error) {
 
 // safeFilename mengambil nama file dari URL dan menolak apa pun yang bisa
 // keluar dari folder model.
-func safeFilename(raw, ext string) (string, error) {
+func safeFilename(raw string, exts []string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", fmt.Errorf("URL tidak valid")
@@ -63,8 +66,10 @@ func safeFilename(raw, ext string) (string, error) {
 	if strings.ContainsAny(name, `/\`) || name == ".." {
 		return "", fmt.Errorf("nama file tidak valid")
 	}
-	if !strings.HasSuffix(strings.ToLower(name), ext) {
-		return "", fmt.Errorf("hanya file %s yang didukung", ext)
+
+	lower := strings.ToLower(name)
+	if !slices.ContainsFunc(exts, func(e string) bool { return strings.HasSuffix(lower, e) }) {
+		return "", fmt.Errorf("hanya file %s yang didukung", strings.Join(exts, "/"))
 	}
 	return name, nil
 }
@@ -96,14 +101,49 @@ func isWhisperModel(path string) bool {
 	return hasMagic(path, "lmgg")
 }
 
-func startModelDownload(rawURL, targetDir, ext string, validate func(string) bool) error {
+// isSafetensors memvalidasi header safetensors: 8 byte pertama adalah
+// panjang header (little-endian), diikuti JSON yang dimulai dengan '{'.
+// Tidak ada magic string ASCII seperti GGUF, jadi diperiksa strukturnya.
+func isSafetensors(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	var lenBuf [8]byte
+	if _, err := io.ReadFull(f, lenBuf[:]); err != nil {
+		return false
+	}
+	headerLen := binary.LittleEndian.Uint64(lenBuf[:])
+	if headerLen == 0 || headerLen > 100*1024*1024 {
+		return false
+	}
+
+	var first [1]byte
+	if _, err := io.ReadFull(f, first[:]); err != nil {
+		return false
+	}
+	return first[0] == '{'
+}
+
+// isValidImageModel memilih validator sesuai ekstensi — image gen
+// menerima .gguf (magic GGUF) maupun .safetensors (header terstruktur).
+func isValidImageModel(path string) bool {
+	if strings.HasSuffix(strings.ToLower(path), ".safetensors") {
+		return isSafetensors(path)
+	}
+	return isGGUF(path)
+}
+
+func startModelDownload(rawURL, targetDir string, exts []string, validate func(string) bool) error {
 	dlMu.Lock()
 	if dlBusy {
 		dlMu.Unlock()
 		return fmt.Errorf("masih ada unduhan berjalan")
 	}
 
-	name, err := safeFilename(rawURL, ext)
+	name, err := safeFilename(rawURL, exts)
 	if err != nil {
 		dlMu.Unlock()
 		return err
@@ -214,7 +254,7 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, modelDir, ".gguf", isGGUF); err != nil {
+	if err := startModelDownload(req.URL, modelDir, []string{".gguf"}, isGGUF); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return

@@ -6,6 +6,41 @@
       "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
       "sizeBytes": 1566768416,
       "note": "Model dasar 512x512, terkuantisasi supaya ringan di CPU."
+    },
+    {
+      "name": "DreamShaper 8",
+      "file": "DreamShaper_8_pruned.safetensors",
+      "url": "https://huggingface.co/Lykon/DreamShaper/resolve/main/DreamShaper_8_pruned.safetensors",
+      "sizeBytes": 2132625894,
+      "note": "SD 1.5 serba guna untuk ilustrasi, anime, dan potret semi-realistis. 512x512."
+    },
+    {
+      "name": "CyberRealistic V8",
+      "file": "CyberRealistic_V8_FP16.safetensors",
+      "url": "https://huggingface.co/cyberdelia/CyberRealistic/resolve/main/CyberRealistic_V8_FP16.safetensors",
+      "sizeBytes": 2132651162,
+      "note": "SD 1.5 fokus realisme/fotorealistik tinggi. 512x512."
+    },
+    {
+      "name": "ReV Animated v1.2.2",
+      "file": "rev-animated-v1-2-2.safetensors",
+      "url": "https://huggingface.co/danbrown/RevAnimated-v1-2-2/resolve/main/rev-animated-v1-2-2.safetensors",
+      "sizeBytes": 5505437736,
+      "note": "SD 1.5 semi-realistis/2.5D, anime, dan seni fantasi. 512x512."
+    },
+    {
+      "name": "DreamShaper XL Lightning",
+      "file": "DreamShaperXL_Lightning.safetensors",
+      "url": "https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/main/DreamShaperXL_Lightning.safetensors",
+      "sizeBytes": 6939220250,
+      "note": "SDXL serba guna, generate cepat (4-8 step). Butuh RAM/VRAM besar. 1024x1024."
+    },
+    {
+      "name": "Juggernaut XL v9 Lightning",
+      "file": "Juggernaut_RunDiffusionPhoto2_Lightning_4Steps.safetensors",
+      "url": "https://huggingface.co/RunDiffusion/Juggernaut-XL-Lightning/resolve/main/Juggernaut_RunDiffusionPhoto2_Lightning_4Steps.safetensors",
+      "sizeBytes": 7105348284,
+      "note": "SDXL fotorealistik, generate cepat (4-8 step). Butuh RAM/VRAM besar. 1024x1024."
     }
   ]
 }

@@ -351,7 +351,7 @@ func handleTTSDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, ttsModelDir, ".gguf", isGGUF); err != nil {
+	if err := startModelDownload(req.URL, ttsModelDir, []string{".gguf"}, isGGUF); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return
