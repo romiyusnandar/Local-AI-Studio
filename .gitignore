@@ -1,8 +1,3 @@
-# Binary hasil build
-/studio
-/studio.exe
-/dist/
-
 # Node.js (frontend Vite + React, server)
 node_modules/
 frontend/dist/
