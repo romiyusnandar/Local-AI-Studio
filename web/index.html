@@ -12,18 +12,42 @@
     async function kirim() {
       const teks = document.getElementById("input").value;
       const hasil = document.getElementById("hasil");
-      hasil.textContent = "berpikir...";
+      hasil.textContent = "";
 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [{ role: "user", content: teks }]
+          messages: [{ role: "user", content: teks }],
+          stream: true
         })
       });
 
-      const data = await res.json();
-      hasil.textContent = data.choices[0].message.content;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let sisa = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sisa += decoder.decode(value, { stream: true });
+        const baris = sisa.split("\n");
+        sisa = baris.pop();
+
+        for (const b of baris) {
+          if (!b.startsWith("data: ")) continue;
+          const isi = b.slice(6).trim();
+          if (isi === "[DONE]") continue;
+
+          try {
+            const token = JSON.parse(isi).choices[0].delta.content;
+            if (token) hasil.textContent += token;
+          } catch (e) {
+            // potongan JSON belum utuh, abaikan
+          }
+        }
+      }
     }
   </script>
 </body>

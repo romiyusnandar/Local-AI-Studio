@@ -43,13 +43,30 @@ func main() {
 			r.Body,
 		)
 		if err != nil {
-			http.Error(w, "Gagal menghubungi LLaMA", http.StatusInternalServerError)
+			http.Error(w, "Gagal menghubungi LLaMA", 502)
 			return
 		}
 		defer res.Body.Close()
 
-		w.Header().Set("Content-Type", "application/json")
-		io.Copy(w, res.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+
+		flusher := w.(http.Flusher)
+
+		buf := make([]byte, 4096)
+		for {
+			n, err := res.Body.Read(buf)
+			if n > 0 {
+				w.Write(buf[:n])
+				flusher.Flush()
+			}
+			if err != nil {
+				if err != io.EOF {
+					http.Error(w, "Gagal membaca respons dari LLaMA", 502)
+				}
+				break
+			}
+		}
 	})
 
 	fmt.Println("buka http://localhost:1420")
