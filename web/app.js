@@ -613,7 +613,16 @@ async function renderModelsPanel() {
     });
 
     mountIcons(body);
-    startProgressPolling();
+
+    // Hanya lanjutkan polling kalau memang ada unduhan yang aktif sekarang —
+    // bukan sisa state "selesai" dari unduhan sebelumnya (mis. backend yang
+    // ter-install otomatis saat aplikasi baru start), supaya tidak memicu
+    // toast "selesai" berulang-ulang setiap panel ini dirender.
+    const currentProgress = await Api.progress();
+    if (currentProgress.active) {
+      renderProgress(currentProgress);
+      startProgressPolling();
+    }
   } catch (err) {
     body.innerHTML = "";
     body.appendChild(emptyBlock("Gagal memuat katalog: " + err.message));

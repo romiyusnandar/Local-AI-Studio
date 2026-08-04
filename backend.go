@@ -167,7 +167,15 @@ func backendReadyIn(dir string, m *BackendManifest, e *BackendEntry) bool {
 }
 
 func installedAccel() string {
-	b, err := os.ReadFile(versionFileIn(backendDir))
+	return installedAccelIn(backendDir)
+}
+
+// installedAccelIn membaca varian akselerasi (cpu/vulkan/cuda/metal) yang
+// tercatat di sidecar .version milik satu backend. Dipakai baik oleh
+// fallbackToCPU (LLM) maupun jendela monitor untuk menampilkan varian tiap
+// mesin.
+func installedAccelIn(dir string) string {
+	b, err := os.ReadFile(versionFileIn(dir))
 	if err != nil {
 		return ""
 	}

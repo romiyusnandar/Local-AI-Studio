@@ -38,6 +38,8 @@ var (
 )
 
 func main() {
+	chdirToExeDir()
+
 	if err := ensureBackend(); err != nil {
 		fmt.Println("gagal menyiapkan backend:", err)
 		fmt.Println("aplikasi tetap jalan — cek koneksi lalu restart")
@@ -98,6 +100,7 @@ func main() {
 	go startTTSEngine()
 	go startSTTEngine()
 	go startImgEngine()
+	go startMonitorWindow()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
@@ -142,10 +145,48 @@ func main() {
 	http.HandleFunc("/api/img/models/cancel", handleCancelDownload)
 	http.HandleFunc("/api/img/models/delete", handleImgDeleteModel)
 
+	ln, err := net.Listen("tcp", uiAddr)
+	if err != nil {
+		fmt.Println("gagal membuka port:", err)
+		return
+	}
+
 	fmt.Println("buka http://localhost:1420")
-	if err := http.ListenAndServe(uiAddr, nil); err != nil {
+	go openBrowser("http://" + uiAddr)
+
+	if err := http.Serve(ln, nil); err != nil {
 		fmt.Println("server berhenti:", err)
 	}
+}
+
+// chdirToExeDir memindahkan direktori kerja ke lokasi file .exe sendiri.
+// Tanpa ini, path relatif seperti app/models mengikuti direktori kerja saat
+// aplikasi dijalankan (cwd) — kalau dibuka lewat shortcut atau dari command
+// line di folder lain, folder app/ bisa kebuat di tempat yang salah.
+func chdirToExeDir() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	os.Chdir(filepath.Dir(exe))
+}
+
+// openBrowser membuka browser default ke url. Kalau gagal (mis. tidak ada
+// GUI/browser tersedia), diamkan saja — pengguna masih bisa buka manual.
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	cmd.Run()
 }
 
 // ---------- handler ----------
