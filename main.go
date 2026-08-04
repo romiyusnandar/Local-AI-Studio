@@ -117,6 +117,8 @@ func main() {
 	http.HandleFunc("/api/stt/models/cancel", handleCancelDownload)
 	http.HandleFunc("/api/stt/models/delete", handleSTTDeleteModel)
 
+	http.HandleFunc("/api/perf", handlePerf)
+
 	fmt.Println("buka http://localhost:1420")
 	if err := http.ListenAndServe(uiAddr, nil); err != nil {
 		fmt.Println("server berhenti:", err)
