@@ -828,6 +828,17 @@ async function refreshSystemPanel() {
 // INIT
 // =================================================================
 
+// Beri tahu server bahwa halaman ini masih terbuka. Server mematikan diri
+// otomatis kalau heartbeat berhenti (tab/jendela ditutup) — lihat
+// watchHeartbeat di main.go. Dikirim tiap 3 detik, jauh lebih sering
+// daripada batas waktu server (20 detik) supaya refresh halaman atau
+// jeda jaringan sesaat tidak salah dianggap "tab ditutup".
+function startHeartbeat() {
+  const ping = () => fetch("/api/heartbeat", { method: "POST" }).catch(() => {});
+  ping();
+  setInterval(ping, 3000);
+}
+
 function init() {
   mountIcons(document);
   initTheme();
@@ -842,6 +853,7 @@ function init() {
 
   pollPerf();
   pollAllEngines();
+  startHeartbeat();
   setInterval(pollPerf, 2500);
   setInterval(pollAllEngines, 3000);
 

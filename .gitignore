@@ -16,6 +16,7 @@
 *.safetensors
 *.ckpt
 *.bin
+*.part
 
 # Hasil generate
 /app/outputs/

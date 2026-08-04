@@ -101,6 +101,7 @@ func main() {
 	go startSTTEngine()
 	go startImgEngine()
 	go startMonitorWindow()
+	go watchHeartbeat()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
@@ -134,6 +135,7 @@ func main() {
 	http.HandleFunc("/api/stt/models/delete", handleSTTDeleteModel)
 
 	http.HandleFunc("/api/perf", handlePerf)
+	http.HandleFunc("/api/heartbeat", handleHeartbeat)
 
 	http.HandleFunc("/api/img/status", handleImgStatus)
 	http.HandleFunc("/api/img/generate", handleImgGenerate)
@@ -172,6 +174,62 @@ func chdirToExeDir() {
 		exe = resolved
 	}
 	os.Chdir(filepath.Dir(exe))
+}
+
+// ---------- heartbeat: matikan otomatis saat tab browser ditutup ----------
+
+const heartbeatTimeout = 20 * time.Second
+
+var (
+	heartbeatMu   sync.Mutex
+	lastHeartbeat time.Time
+	heartbeatSeen bool
+)
+
+// handleHeartbeat dipanggil UI (web/app.js) tiap beberapa detik selama
+// halaman terbuka. Dipakai ulang oleh watchHeartbeat untuk mendeteksi kapan
+// semua tab/jendela browser sudah ditutup.
+func handleHeartbeat(w http.ResponseWriter, r *http.Request) {
+	heartbeatMu.Lock()
+	lastHeartbeat = time.Now()
+	heartbeatSeen = true
+	heartbeatMu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// watchHeartbeat mematikan seluruh aplikasi (server + semua mesin AI) kalau
+// tidak ada heartbeat masuk lagi selama heartbeatTimeout — tandanya semua
+// tab browser yang membuka UI sudah ditutup. Sengaja baru mulai menghitung
+// SETELAH heartbeat pertama diterima: supaya server tidak mati sebelum
+// browser sempat kebuka, dan supaya tetap bisa dipakai headless (lewat API
+// saja, tanpa pernah buka UI) tanpa risiko auto-shutdown.
+func watchHeartbeat() {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		heartbeatMu.Lock()
+		seen := heartbeatSeen
+		elapsed := time.Since(lastHeartbeat)
+		heartbeatMu.Unlock()
+
+		if !seen || elapsed <= heartbeatTimeout {
+			continue
+		}
+		if isDownloadActive() {
+			// Jangan matikan paksa di tengah unduhan — proses ke-kill akan
+			// menyisakan file .part yang rusak/tidak lengkap. Coba lagi di
+			// tick berikutnya sampai unduhannya selesai.
+			continue
+		}
+
+		fmt.Println("\ntab browser sudah ditutup, menghentikan aplikasi...")
+		shutdown(getProcess())
+		shutdownTTS(getTTSProcess())
+		shutdownSTT(getSTTProcess())
+		shutdownImg(getImgProcess())
+		os.Exit(0)
+	}
 }
 
 // openBrowser membuka browser default ke url. Kalau gagal (mis. tidak ada

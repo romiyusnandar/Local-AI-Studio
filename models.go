@@ -251,6 +251,15 @@ func cancelDownload() bool {
 	return true
 }
 
+// isDownloadActive dipakai watchHeartbeat supaya tidak mematikan aplikasi
+// di tengah unduhan model besar — kalau ini terjadi, proses ke-kill paksa
+// dan menyisakan file .part yang rusak/tidak lengkap.
+func isDownloadActive() bool {
+	dlMu.Lock()
+	defer dlMu.Unlock()
+	return dlBusy
+}
+
 // ---------- handler ----------
 
 func handleCatalog(w http.ResponseWriter, r *http.Request) {
