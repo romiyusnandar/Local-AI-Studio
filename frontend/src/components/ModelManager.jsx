@@ -6,7 +6,10 @@ import "./ModelManager.css";
 // Baru "llm" (Chat) yang punya mesin sungguhan sekarang. Tab TTS/STT/Image
 // tinggal ditambahkan di sini begitu fase-nya masing-masing selesai —
 // tidak perlu ubah struktur komponen ini lagi.
-const KINDS = [{ id: "llm", label: "Chat", ext: ".gguf" }];
+const KINDS = [
+  { id: "llm", label: "Chat", ext: ".gguf" },
+  { id: "stt", label: "Suara→Teks", ext: ".bin" },
+];
 
 function formatBytes(n) {
   if (!n || n <= 0) return "0 B";

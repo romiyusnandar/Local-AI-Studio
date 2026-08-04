@@ -116,25 +116,6 @@
   background: rgba(79, 184, 168, 0.15);
 }
 
-.btn-sm {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  padding: 5px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 12px;
-  flex: none;
-}
-.btn-danger {
-  color: #e2574c;
-  border-color: #5c2620;
-  background: transparent;
-}
-
 .download-bar-wrap {
   margin: 14px 0;
 }

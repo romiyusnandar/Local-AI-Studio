@@ -3,8 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
+import Busboy from "busboy";
 import * as llm from "./engines/llm.js";
+import * as stt from "./engines/stt.js";
 import { getProgress } from "./lib/progress.js";
+import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "frontend", "dist");
@@ -19,27 +22,6 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".ico": "image/x-icon",
 };
-
-function sendJson(res, status, body) {
-  const data = JSON.stringify(body);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(data);
-}
-
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
-  });
-}
 
 function serveStatic(req, res) {
   let reqPath = decodeURIComponent(req.url.split("?")[0]);
@@ -65,86 +47,7 @@ function serveStatic(req, res) {
   });
 }
 
-// ---------- handler LLM ----------
-
-async function handleStatus(req, res) {
-  sendJson(res, 200, { mesinHidup: llm.isRunning(), model: llm.getActiveModel() });
-}
-
-async function handleModels(req, res) {
-  const models = await llm.listModels();
-  sendJson(res, 200, { models, active: llm.getActiveModel(), ready: llm.isRunning() });
-}
-
-async function handleSelectModel(req, res) {
-  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: "permintaan tidak valid" });
-  }
-  if (!(await llm.isValidModel(body.model))) {
-    return sendJson(res, 400, { error: "model tidak ditemukan" });
-  }
-  if (body.model === llm.getActiveModel() && llm.isRunning()) {
-    return sendJson(res, 200, { ok: true, model: body.model, note: "sudah aktif" });
-  }
-  llm.shutdown(llm.getProcess());
-  llm.setActiveModel(body.model);
-  llm.startEngine();
-  sendJson(res, 200, { ok: true, model: body.model });
-}
-
-async function handleCatalog(req, res) {
-  try {
-    const catalog = await llm.loadCatalog();
-    const installed = new Set(await llm.listModels());
-    const models = catalog.models.map((m) => ({ ...m, installed: installed.has(m.file) }));
-    sendJson(res, 200, { models });
-  } catch {
-    sendJson(res, 500, { error: "katalog rusak" });
-  }
-}
-
-async function handleDownloadModel(req, res) {
-  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: "permintaan tidak valid" });
-  }
-  try {
-    await llm.startModelDownload(body.url, body.projectorUrl);
-    sendJson(res, 200, { ok: true });
-  } catch (err) {
-    sendJson(res, 400, { error: err.message });
-  }
-}
-
-async function handleCancelDownload(req, res) {
-  sendJson(res, 200, { ok: llm.cancelDownload() });
-}
-
-async function handleDeleteModel(req, res) {
-  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: "permintaan tidak valid" });
-  }
-  if (!(await llm.isValidModel(body.model))) {
-    return sendJson(res, 400, { error: "model tidak ditemukan" });
-  }
-  try {
-    await llm.deleteModel(body.model);
-    sendJson(res, 200, { ok: true });
-  } catch {
-    sendJson(res, 500, { error: "gagal menghapus" });
-  }
-}
+// ---------- handler LLM (chat: proxy SSE, bukan pola model-manager biasa) ----------
 
 // handleChat mem-proxy mentah ke llama-server, meneruskan stream SSE apa
 // adanya. Catatan: kalau client memutus koneksi duluan, itu bukan berarti
@@ -181,18 +84,68 @@ async function handleChat(req, res) {
   }
 }
 
+// ---------- handler STT (transcribe: upload multipart, bukan model-manager biasa) ----------
+
+function parseMultipartFile(req) {
+  return new Promise((resolve, reject) => {
+    const bb = Busboy({ headers: req.headers });
+    let fileBuffer = null;
+    let filename = "audio.wav";
+    const chunks = [];
+
+    bb.on("file", (_name, stream, info) => {
+      filename = info.filename || filename;
+      stream.on("data", (d) => chunks.push(d));
+    });
+    bb.on("finish", () => {
+      fileBuffer = Buffer.concat(chunks);
+      resolve({ fileBuffer, filename });
+    });
+    bb.on("error", reject);
+    req.pipe(bb);
+  });
+}
+
+async function handleTranscribe(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const { fileBuffer, filename } = await parseMultipartFile(req);
+    if (!fileBuffer || fileBuffer.length === 0) {
+      return sendJson(res, 400, { error: "file audio tidak ditemukan" });
+    }
+    const result = await stt.transcribe(fileBuffer, filename);
+    sendJson(res, 200, result);
+  } catch (err) {
+    sendJson(res, err.message === "mesin STT sedang mati" ? 503 : 500, { error: err.message });
+  }
+}
+
 // ---------- routing ----------
+
+const llmRoutes = makeEngineRoutes(llm);
+const sttRoutes = makeEngineRoutes(stt);
 
 const routes = {
   "/api/health": (req, res) => sendJson(res, 200, { ok: true, name: "Local AI Studio" }),
-  "/api/status": handleStatus,
+
+  "/api/status": llmRoutes.status,
   "/api/chat": handleChat,
-  "/api/models": handleModels,
-  "/api/models/select": handleSelectModel,
-  "/api/catalog": handleCatalog,
-  "/api/models/download": handleDownloadModel,
-  "/api/models/cancel": handleCancelDownload,
-  "/api/models/delete": handleDeleteModel,
+  "/api/models": llmRoutes.models,
+  "/api/models/select": llmRoutes.select,
+  "/api/catalog": llmRoutes.catalog,
+  "/api/models/download": llmRoutes.download,
+  "/api/models/cancel": llmRoutes.cancel,
+  "/api/models/delete": llmRoutes.delete,
+
+  "/api/stt/status": sttRoutes.status,
+  "/api/stt/transcribe": handleTranscribe,
+  "/api/stt/models": sttRoutes.models,
+  "/api/stt/models/select": sttRoutes.select,
+  "/api/stt/catalog": sttRoutes.catalog,
+  "/api/stt/models/download": sttRoutes.download,
+  "/api/stt/models/cancel": sttRoutes.cancel,
+  "/api/stt/models/delete": sttRoutes.delete,
+
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
 };
 
@@ -221,15 +174,26 @@ async function main() {
     console.log("gagal menyiapkan backend:", err.message);
     console.log("aplikasi tetap jalan — cek koneksi lalu restart");
   }
-
-  const models = await llm.listModels();
-  if (models.length > 0) {
-    llm.setActiveModel(models[0]);
+  const llmModels = await llm.listModels();
+  if (llmModels.length > 0) {
+    llm.setActiveModel(llmModels[0]);
   } else {
     console.log(`belum ada model — taruh file .gguf di ${llm.modelDir}/`);
   }
-
   llm.startEngine();
+
+  try {
+    await stt.ensureBackend();
+  } catch (err) {
+    console.log("gagal menyiapkan backend STT:", err.message);
+    console.log("aplikasi tetap jalan — cek koneksi lalu restart");
+  }
+  const sttModels = await stt.listModels();
+  if (sttModels.length > 0) {
+    stt.setActiveModel(sttModels[0]);
+  } else {
+    console.log(`belum ada model STT — taruh file .bin di ${stt.modelDir}/`);
+  }
 
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`buka http://localhost:${PORT}`);

@@ -25,3 +25,53 @@ body {
   color: var(--text);
   font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ---- Primitif yang dipakai ulang lintas panel ---- */
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.status-line .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.status-line .dot.ready {
+  background: var(--teal);
+  box-shadow: 0 0 5px var(--teal);
+}
+
+.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  flex: none;
+}
+.btn-danger {
+  color: #e2574c;
+  border-color: #5c2620;
+  background: transparent;
+}
+
+.label {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: block;
+  margin-bottom: 6px;
+}

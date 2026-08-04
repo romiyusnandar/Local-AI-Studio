@@ -25,25 +25,6 @@
   min-width: 220px;
 }
 
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.status-line .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
-.status-line .dot.ready {
-  background: var(--teal);
-  box-shadow: 0 0 5px var(--teal);
-}
-
 .chat-body {
   flex: 1;
   overflow-y: auto;

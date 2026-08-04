@@ -1,0 +1,113 @@
+.speech-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.speech-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.speech-header h1 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.speech-header select {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 3px;
+  min-width: 220px;
+}
+
+.speech-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  max-width: 640px;
+}
+
+.mic-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.mic-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+.mic-btn.recording {
+  background: rgba(226, 87, 76, 0.15);
+  border-color: #e2574c;
+  color: #e2574c;
+}
+.mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.level-meter {
+  flex: 1;
+  height: 30px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+}
+.level-meter i {
+  display: block;
+  width: 4px;
+  height: 6px;
+  border-radius: 1px;
+  transition: height 0.06s ease, background-color 0.06s ease;
+}
+
+.dropzone {
+  border: 1px dashed var(--border-strong);
+  border-radius: 3px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg-inset);
+  margin-bottom: 18px;
+}
+.dropzone:hover {
+  border-color: var(--teal);
+}
+
+.transcript-box {
+  width: 100%;
+  min-height: 120px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 10px;
+  font-family: inherit;
+  white-space: pre-wrap;
+  resize: vertical;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}

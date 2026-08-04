@@ -45,6 +45,16 @@ export function getPort() {
 }
 export { isDownloadActive };
 
+export async function status() {
+  return { mesinHidup: running, model: activeModel };
+}
+
+export async function selectModel(model) {
+  shutdown(proc);
+  activeModel = model;
+  startEngine();
+}
+
 // ---------- backend ----------
 
 export async function ensureBackend() {
