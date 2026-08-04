@@ -1,11 +1,7 @@
-import "./App.css";
+import Chat from "./components/Chat.jsx";
 
 function App() {
-  return (
-    <div id="shell">
-      <p>Local AI Studio — scaffold siap. Panel akan ditambahkan bertahap.</p>
-    </div>
-  );
+  return <Chat />;
 }
 
 export default App;
