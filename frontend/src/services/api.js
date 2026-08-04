@@ -22,10 +22,10 @@ function post(url, payload) {
   });
 }
 
-// kind: "llm" | "tts" | "stt" | "img" -> base path API. "tts"/"img" ditambah
+// kind: "llm" | "tts" | "stt" | "img" -> base path API. "img" ditambah
 // begitu fase-nya dikerjakan (tanpa perlu ubah kode di sini lagi, cukup
 // tambah entri).
-const BASE = { llm: "/api", stt: "/api/stt" };
+const BASE = { llm: "/api", stt: "/api/stt", tts: "/api/tts" };
 
 export const Api = {
   status: (kind = "llm") => j(`${BASE[kind]}/status`),
@@ -53,5 +53,20 @@ export const Api = {
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error((body && body.error) || `mesin STT gagal (${res.status})`);
     return body;
+  },
+
+  ttsVoices: () => j("/api/tts/voices"),
+
+  async speak(text, voice, speed) {
+    const res = await fetch("/api/tts/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice, speed }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error((body && body.error) || `mesin TTS gagal (${res.status})`);
+    }
+    return res.blob();
   },
 };

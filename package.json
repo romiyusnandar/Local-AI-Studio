@@ -9,8 +9,10 @@
     "dev:frontend": "npm --prefix frontend run dev"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "adm-zip": "^0.6.0",
     "busboy": "^1.6.0",
+    "kokoro-js": "^1.2.1",
     "tar": "^7.5.22"
   }
 }

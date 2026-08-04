@@ -16,11 +16,13 @@ frontend/dist/
 # Bobot model — bisa puluhan GB
 /app/models/
 /app/llm-models/
+/app/tts-cache/
 *.gguf
 *.safetensors
 *.ckpt
 *.bin
 *.part
+*.onnx
 
 # Hasil generate
 /app/outputs/

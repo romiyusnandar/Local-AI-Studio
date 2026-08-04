@@ -1,9 +1,10 @@
-import { MessageSquare, Box, Mic } from "lucide-react";
+import { MessageSquare, Box, Mic, Volume2 } from "lucide-react";
 import "./Sidebar.css";
 
 const ITEMS = [
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "speech", label: "Suara→Teks", icon: Mic },
+  { id: "tts", label: "Teks→Suara", icon: Volume2 },
   { id: "models", label: "Model", icon: Box },
 ];
 

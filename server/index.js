@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import Busboy from "busboy";
 import * as llm from "./engines/llm.js";
 import * as stt from "./engines/stt.js";
+import * as tts from "./engines/tts.js";
 import { getProgress } from "./lib/progress.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
@@ -120,6 +121,27 @@ async function handleTranscribe(req, res) {
   }
 }
 
+// ---------- handler TTS (speak: balasan audio mentah, bukan pola model-manager biasa) ----------
+
+async function handleSpeak(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+
+    const wav = await tts.speak(body.text, body.voice, body.speed);
+    res.writeHead(200, { "Content-Type": "audio/wav" });
+    res.end(wav);
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
+}
+
+async function handleVoices(req, res) {
+  sendJson(res, 200, { voices: tts.VOICES });
+}
+
 // ---------- routing ----------
 
 const llmRoutes = makeEngineRoutes(llm);
@@ -145,6 +167,10 @@ const routes = {
   "/api/stt/models/download": sttRoutes.download,
   "/api/stt/models/cancel": sttRoutes.cancel,
   "/api/stt/models/delete": sttRoutes.delete,
+
+  "/api/tts/status": (req, res) => tts.status().then((s) => sendJson(res, 200, s)),
+  "/api/tts/speak": handleSpeak,
+  "/api/tts/voices": handleVoices,
 
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
 };

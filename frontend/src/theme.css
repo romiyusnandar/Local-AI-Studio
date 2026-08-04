@@ -75,3 +75,21 @@ body {
   display: block;
   margin-bottom: 6px;
 }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--amber);
+  border: 1px solid var(--amber);
+  color: #1a1200;
+  padding: 9px 16px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

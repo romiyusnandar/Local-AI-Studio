@@ -1,0 +1,56 @@
+.tts-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tts-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.tts-header h1 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.tts-header select {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 3px;
+  min-width: 180px;
+}
+
+.tts-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  max-width: 640px;
+}
+
+.tts-body textarea {
+  width: 100%;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 10px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+}
+
+.audio-result {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.audio-result audio {
+  width: 100%;
+}

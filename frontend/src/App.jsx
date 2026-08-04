@@ -2,6 +2,7 @@ import { useState } from "react";
 import Sidebar from "./components/Sidebar.jsx";
 import Chat from "./components/Chat.jsx";
 import Speech from "./components/Speech.jsx";
+import TextToSpeech from "./components/TextToSpeech.jsx";
 import ModelManager from "./components/ModelManager.jsx";
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
       <div style={{ flex: 1, minWidth: 0 }}>
         {panel === "chat" && <Chat />}
         {panel === "speech" && <Speech />}
+        {panel === "tts" && <TextToSpeech />}
         {panel === "models" && <ModelManager />}
       </div>
     </div>
