@@ -1,0 +1,12 @@
+/dist/
+/web/dist/*
+!/web/dist/index.html
+/web/node_modules/
+/app/models/
+/app/llm-models/
+/app/outputs/
+/app/backend/
+*.gguf
+*.safetensors
+config.json
+/tmp/

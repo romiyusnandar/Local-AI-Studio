@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Studio</title></head>
+<body>
+  <h1>Local AI Studio</h1>
+  <button onclick="cek()">Cek server</button>
+  <p id="hasil">-</p>
+
+  <script>
+    async function cek() {
+      const res = await fetch("/api/waktu");
+      const data = await res.json();
+      document.getElementById("hasil").textContent = data.waktu;
+    }
+  </script>
+</body>
+</html>
