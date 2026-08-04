@@ -1,5 +1,6 @@
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
@@ -15,6 +16,12 @@ import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "frontend", "dist");
 const PORT = Number(process.env.FRONTEND_PORT) || 1420;
+
+// Default 127.0.0.1: hanya bisa diakses dari komputer ini (aman). Set
+// HOST=0.0.0.0 untuk membuka akses dari device lain di jaringan yang sama
+// (mis. HP di WiFi yang sama). Aplikasi ini TIDAK punya autentikasi, jadi
+// pakai 0.0.0.0 hanya di jaringan tepercaya — jangan diekspos ke internet.
+const HOST = process.env.HOST || "127.0.0.1";
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -345,9 +352,27 @@ async function main() {
   }
   img.startEngine();
 
-  server.listen(PORT, "127.0.0.1", () => {
+  server.listen(PORT, HOST, () => {
     console.log(`buka http://localhost:${PORT}`);
+    if (HOST === "0.0.0.0") {
+      for (const addr of lanAddresses()) {
+        console.log(`  dari device lain di jaringan yang sama: http://${addr}:${PORT}`);
+      }
+      console.log("  (akses jaringan aktif — pastikan hanya di jaringan tepercaya)");
+    }
   });
+}
+
+// lanAddresses mengumpulkan IPv4 non-internal (alamat LAN) supaya bisa
+// ditampilkan sebagai URL yang bisa dibuka dari device lain.
+function lanAddresses() {
+  const out = [];
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces || []) {
+      if (i.family === "IPv4" && !i.internal) out.push(i.address);
+    }
+  }
+  return out;
 }
 
 main();

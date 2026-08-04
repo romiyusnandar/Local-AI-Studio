@@ -165,6 +165,26 @@ Ini menjalankan Vite dev server terpisah — tetap perlu `npm start` berjalan di
 | Variabel | Default | Keterangan |
 |---|---|---|
 | `FRONTEND_PORT` | `1420` | Port HTTP server |
+| `HOST` | `127.0.0.1` | Alamat bind. Default hanya bisa diakses dari komputer ini. Set `0.0.0.0` agar bisa diakses dari device lain di jaringan yang sama. |
+
+### Mengakses dari device lain (HP/laptop di WiFi yang sama)
+
+Secara default aplikasi hanya bisa dibuka di komputer tempat ia berjalan. Untuk membukanya dari device lain di jaringan yang sama:
+
+```bash
+# Windows (PowerShell)
+$env:HOST="0.0.0.0"; npm start
+
+# Linux / macOS
+HOST=0.0.0.0 npm start
+```
+
+Saat aktif, server menampilkan alamat yang bisa dibuka dari device lain, mis. `http://192.168.1.7:1420`. Buka alamat itu di browser HP/laptop lain.
+
+Catatan penting:
+- Aplikasi ini **tidak punya autentikasi** — siapa pun di jaringan yang sama bisa memakainya. Gunakan hanya di jaringan tepercaya (WiFi rumah), **jangan** ekspos ke internet.
+- Kalau tetap tidak bisa diakses, kemungkinan diblokir **firewall**. Di Windows, izinkan Node.js lewat Windows Defender Firewall (biasanya muncul prompt "Allow access" saat pertama kali), atau buka port `1420` untuk jaringan Private.
+- Pastikan kedua device berada di jaringan/WiFi yang sama.
 
 ## Catatan
 
