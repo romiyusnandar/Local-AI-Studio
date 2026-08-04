@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -16,99 +15,231 @@ import (
 	"time"
 )
 
-
 var (
 	//go:embed web
 	file embed.FS
-	portLlama	  int
 
-	mu 			  sync.Mutex
-	engineRunning bool
+	mu             sync.Mutex
+	portLlama      int
+	engineRunning  bool
+	forceShutdown  bool
+	runningProcess *exec.Cmd
 )
 
 func main() {
-	proses, err := runLlama()
-	if err != nil {
+	if _, err := runLlama(); err != nil {
 		fmt.Println("gagal menjalankan LLaMA:", err)
+		return
 	}
 
 	sinyal := make(chan os.Signal, 1)
 	signal.Notify(sinyal, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sinyal
-		fmt.Println("menerima sinyal, menghentikan LLaMA...")
-		shutdown(proses)
+		fmt.Println("\nmenghentikan mesin AI...")
+		shutdown(getProcess())
 		os.Exit(0)
 	}()
 
 	fmt.Println("menunggu mesin siap...")
 	if err := waitForReady(); err != nil {
 		fmt.Println("mesin tidak siap:", err)
-		shutdown(proses)
+		shutdown(getProcess())
 		return
 	}
 	fmt.Println("mesin siap!")
-	go monitor(proses)
+
+	go monitor(getProcess())
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
-
-	http.HandleFunc("/api/waktu", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"waktu":%q}`, time.Now().Format("15:04:05"))
-	})
-
-	http.HandleFunc("/api/chat", func (w http.ResponseWriter, r *http.Request) {
-		res, err := http.Post(
-			fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", portLlama),
-			"application/json",
-			r.Body,
-		)
-		if err != nil {
-			setEngine(false)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(502)
-			fmt.Fprintf(w, `{"error":"gagal menghubungi LLaMA: %q"}`, err)
-			return
-		}
-		defer res.Body.Close()
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-
-		flusher := w.(http.Flusher)
-
-		buf := make([]byte, 4096)
-		for {
-			n, err := res.Body.Read(buf)
-			if n > 0 {
-				w.Write(buf[:n])
-				flusher.Flush()
-			}
-			if err != nil {
-				if err != io.EOF {
-					http.Error(w, "Gagal membaca respons dari LLaMA", 502)
-				}
-				break
-			}
-		}
-	})
-
-	http.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"mesinHidup":%t}`, isEngineRunning())
-	})
+	http.HandleFunc("/api/status", handleStatus)
+	http.HandleFunc("/api/chat", handleChat)
 
 	fmt.Println("buka http://localhost:1420")
-	http.ListenAndServe("127.0.0.1:1420", nil)
+	if err := http.ListenAndServe("127.0.0.1:1420", nil); err != nil {
+		fmt.Println("server berhenti:", err)
+	}
+}
+
+// ---------- handler ----------
+
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"mesinHidup":%t}`, isEngineRunning())
+}
+
+func handleChat(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if !isEngineRunning() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprint(w, `{"error":"mesin AI sedang mati"}`)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"error":"streaming tidak didukung"}`)
+		return
+	}
+
+	res, err := http.Post(
+		fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", getPort()),
+		"application/json",
+		r.Body,
+	)
+	if err != nil {
+		setEngine(false)
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, `{"error":"mesin AI tidak merespons"}`)
+		return
+	}
+	defer res.Body.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	buf := make([]byte, 4096)
+	for {
+		n, err := res.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// ---------- siklus hidup mesin ----------
+
+func runLlama() (*exec.Cmd, error) {
+	port, err := emptyPort()
+	if err != nil {
+		return nil, err
+	}
+
+	path := "app/backend/llama-server"
+	if runtime.GOOS == "windows" {
+		path += ".exe"
+	}
+
+	cmd := exec.Command(path,
+		"-m", "app/models/model.gguf",
+		"--host", "127.0.0.1",
+		"--port", fmt.Sprint(port),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	setProcess(cmd, port)
+	return cmd, nil
 }
 
 func monitor(cmd *exec.Cmd) {
-	setEngine(true)
+	failedAttempts := 0
 
-	err := cmd.Wait()
+	for {
+		mulai := time.Now()
 
-	setEngine(false)
-	fmt.Println("mesin berhenti:", err)
+		setEngine(true)
+		cmd.Wait()
+		setEngine(false)
+
+		if isForceShutdown() {
+			return
+		}
+
+		if time.Since(mulai) > time.Minute {
+			failedAttempts = 0
+		}
+
+		failedAttempts++
+		if failedAttempts > 3 {
+			fmt.Println("mesin gagal 3 kali berturut-turut, berhenti mencoba")
+			return
+		}
+
+		pause := time.Duration(failedAttempts) * 2 * time.Second
+		fmt.Printf("mesin berhenti, mencoba lagi dalam %v (percobaan %d/3)\n",
+			pause, failedAttempts)
+		time.Sleep(pause)
+
+		newCmd, err := runLlama()
+		if err != nil {
+			fmt.Println("gagal menyalakan ulang:", err)
+			continue
+		}
+
+		if err := waitForReady(); err != nil {
+			fmt.Println("mesin tidak siap setelah restart:", err)
+		}
+
+		cmd = newCmd
+	}
+}
+
+func waitForReady() error {
+	limit := time.Now().Add(60 * time.Second)
+	client := &http.Client{Timeout: 2 * time.Second}
+
+	for time.Now().Before(limit) {
+		res, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", getPort()))
+		if err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("mesin tidak merespons dalam 60 detik")
+}
+
+func shutdown(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+
+	setForceShutdown(true)
+
+	if runtime.GOOS == "windows" {
+		exec.Command("taskkill", "/PID",
+			fmt.Sprint(cmd.Process.Pid), "/T", "/F").Run()
+	} else {
+		cmd.Process.Kill()
+	}
+
+	time.Sleep(200 * time.Millisecond)
+}
+
+// ---------- akses variabel bersama ----------
+
+func setProcess(cmd *exec.Cmd, port int) {
+	mu.Lock()
+	runningProcess, portLlama = cmd, port
+	mu.Unlock()
+}
+
+func getProcess() *exec.Cmd {
+	mu.Lock()
+	defer mu.Unlock()
+	return runningProcess
+}
+
+func getPort() int {
+	mu.Lock()
+	defer mu.Unlock()
+	return portLlama
 }
 
 func setEngine(v bool) {
@@ -123,20 +254,19 @@ func isEngineRunning() bool {
 	return engineRunning
 }
 
-func shutdown(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-	
-	if runtime.GOOS == "windows" {
-		exec.Command("taskkill", "/PID",
-			fmt.Sprint(cmd.Process.Pid), "/T", "/F").Run()
-	} else {
-		cmd.Process.Kill()
-	}
-
-	time.Sleep(200 * time.Millisecond)
+func setForceShutdown(v bool) {
+	mu.Lock()
+	forceShutdown = v
+	mu.Unlock()
 }
+
+func isForceShutdown() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return forceShutdown
+}
+
+// ---------- lain-lain ----------
 
 func emptyPort() (int, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -145,47 +275,6 @@ func emptyPort() (int, error) {
 	}
 	defer ln.Close()
 	return ln.Addr().(*net.TCPAddr).Port, nil
-}
-
-func runLlama() (*exec.Cmd, error) {
-	p, err := emptyPort()
-	if err != nil {
-		return nil, err
-	}
-	portLlama = p
-
-	path := "app/backend/llama-server"
-	if runtime.GOOS == "windows" {
-		path += ".exe"
-	}
-
-	cmd := exec.Command(path,
-		"-m", "app/models/model.gguf",
-		"--host", "127.0.0.1",
-		"--port", fmt.Sprint(portLlama),
-	)
-
-	// logging
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd, cmd.Start()
-}
-
-func waitForReady() error {
-	limit := time.Now().Add(60 * time.Second)
-
-	for time.Now().Before(limit) {
-		res, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", portLlama))
-		if err == nil {
-			res.Body.Close()
-			if res.StatusCode == 200 {
-				return nil
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return fmt.Errorf("mesin tidak merespons dalam 60 detik")
 }
 
 func sub() fs.FS {
