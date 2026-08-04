@@ -22,6 +22,12 @@ type CatalogModel struct {
 	URL       string `json:"url"`
 	SizeBytes int64  `json:"sizeBytes"`
 	Note      string `json:"note,omitempty"`
+
+	// Untuk model multimodal (mis. LLaVA) yang butuh file vision projector
+	// terpisah. Kalau diisi, projector otomatis ikut terunduh.
+	ProjectorFile      string `json:"projectorFile,omitempty"`
+	ProjectorURL       string `json:"projectorUrl,omitempty"`
+	ProjectorSizeBytes int64  `json:"projectorSizeBytes,omitempty"`
 }
 
 type ModelCatalog struct {
@@ -136,7 +142,42 @@ func isValidImageModel(path string) bool {
 	return isGGUF(path)
 }
 
+// downloadAndValidate mengunduh satu file ke targetDir, memvalidasinya, lalu
+// me-rename dari .part ke nama final. Dipakai baik untuk model utama maupun
+// file companion (projector).
+func downloadAndValidate(ctx context.Context, rawURL, targetDir string, exts []string, validate func(string) bool) (string, error) {
+	name, err := safeFilename(rawURL, exts)
+	if err != nil {
+		return "", err
+	}
+
+	final := filepath.Join(targetDir, name)
+	tmp := final + ".part"
+	if err := downloadCtx(ctx, rawURL, tmp); err != nil {
+		// File .part sengaja dibiarkan supaya bisa dilanjutkan nanti.
+		return "", err
+	}
+
+	if !validate(tmp) {
+		os.Remove(tmp)
+		return "", fmt.Errorf("file yang diunduh bukan model yang valid")
+	}
+
+	if err := os.Rename(tmp, final); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
 func startModelDownload(rawURL, targetDir string, exts []string, validate func(string) bool) error {
+	return startModelDownloadWithProjector(rawURL, "", targetDir, exts, validate)
+}
+
+// startModelDownloadWithProjector mengunduh model utama, lalu kalau
+// projectorURL diisi, mengunduh file vision projector-nya juga dan mencatat
+// sidecar "<model>.mmproj" berisi nama file projector — dibaca lagi oleh
+// runLlama() saat model dijalankan.
+func startModelDownloadWithProjector(rawURL, projectorURL, targetDir string, exts []string, validate func(string) bool) error {
 	dlMu.Lock()
 	if dlBusy {
 		dlMu.Unlock()
@@ -173,29 +214,28 @@ func startModelDownload(rawURL, targetDir string, exts []string, validate func(s
 			return
 		}
 
-		tmp := final + ".part"
-		if err := downloadCtx(ctx, rawURL, tmp); err != nil {
-			// File .part sengaja dibiarkan supaya bisa dilanjutkan nanti.
+		if _, err := downloadAndValidate(ctx, rawURL, targetDir, exts, validate); err != nil {
 			setProgress(Progress{Done: true, Err: err.Error(), Label: name})
 			return
 		}
+		fmt.Println("model terunduh:", name)
 
-		if !validate(tmp) {
-			os.Remove(tmp)
-			setProgress(Progress{Done: true, Label: name,
-				Err: "file yang diunduh bukan model yang valid"})
-			return
-		}
-
-		// Rename hanya setelah lengkap dan tervalidasi, supaya file setengah
-		// jadi tidak pernah muncul di daftar model.
-		if err := os.Rename(tmp, final); err != nil {
-			setProgress(Progress{Done: true, Err: err.Error()})
-			return
+		if projectorURL != "" {
+			setProgress(Progress{Active: true, Label: "Mengunduh proyektor untuk " + name})
+			projName, err := downloadAndValidate(ctx, projectorURL, targetDir, []string{".gguf"}, isGGUF)
+			if err != nil {
+				setProgress(Progress{Done: true, Label: name,
+					Err: "model utama siap, tapi proyektor gagal: " + err.Error()})
+				return
+			}
+			if err := os.WriteFile(final+".mmproj", []byte(projName), 0o644); err != nil {
+				setProgress(Progress{Done: true, Label: name, Err: err.Error()})
+				return
+			}
+			fmt.Println("proyektor terunduh:", projName)
 		}
 
 		setProgress(Progress{Done: true, Percent: 100, Label: name + " siap"})
-		fmt.Println("model terunduh:", name)
 	}()
 
 	return nil
@@ -246,7 +286,8 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		URL string `json:"url"`
+		URL          string `json:"url"`
+		ProjectorURL string `json:"projectorUrl,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest,
@@ -254,7 +295,7 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, modelDir, []string{".gguf"}, isGGUF); err != nil {
+	if err := startModelDownloadWithProjector(req.URL, req.ProjectorURL, modelDir, []string{".gguf"}, isGGUF); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return
@@ -297,6 +338,19 @@ func handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 			map[string]any{"error": "gagal menghapus"})
 		return
 	}
+	removeProjectorSidecar(modelDir, req.Model)
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// removeProjectorSidecar menghapus file projector companion dan sidecar
+// ".mmproj"-nya, kalau model yang dihapus punya salah satu.
+func removeProjectorSidecar(dir, model string) {
+	sidecar := filepath.Join(dir, model) + ".mmproj"
+	if b, err := os.ReadFile(sidecar); err == nil {
+		if projName := strings.TrimSpace(string(b)); projName != "" {
+			os.Remove(filepath.Join(dir, projName))
+		}
+	}
+	os.Remove(sidecar)
 }

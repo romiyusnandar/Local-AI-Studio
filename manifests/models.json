@@ -41,6 +41,16 @@
       "url": "https://huggingface.co/lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
       "sizeBytes": 4920739168,
       "note": "Model serba guna kualitas tinggi. Untuk mesin dengan RAM/VRAM besar."
+    },
+    {
+      "name": "LLaVA 1.5 7B (vision)",
+      "file": "ggml-model-q4_k.gguf",
+      "url": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/ggml-model-q4_k.gguf",
+      "sizeBytes": 4081004224,
+      "projectorFile": "mmproj-model-f16.gguf",
+      "projectorUrl": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/mmproj-model-f16.gguf",
+      "projectorSizeBytes": 624434336,
+      "note": "Model multimodal — bisa memahami gambar yang dikirim lewat chat. Proyektor visi otomatis ikut terunduh."
     }
   ]
 }

@@ -287,6 +287,25 @@ func isValidModel(name string) bool {
 	return slices.Contains(listModels(), name)
 }
 
+// projectorFor mengecek sidecar "<model>.mmproj" yang ditulis saat unduhan
+// companion projector selesai (lihat startModelDownloadWithProjector di
+// models.go), dan mengembalikan path lengkap projector kalau ada dan valid.
+func projectorFor(modelPath string) string {
+	b, err := os.ReadFile(modelPath + ".mmproj")
+	if err != nil {
+		return ""
+	}
+	projName := strings.TrimSpace(string(b))
+	if projName == "" {
+		return ""
+	}
+	projPath := filepath.Join(filepath.Dir(modelPath), projName)
+	if _, err := os.Stat(projPath); err != nil {
+		return ""
+	}
+	return projPath
+}
+
 // ---------- siklus hidup mesin ----------
 
 func startEngine() {
@@ -328,11 +347,16 @@ func runLlama() (*exec.Cmd, error) {
 		bin += ".exe"
 	}
 
-	cmd := exec.Command(bin,
+	args := []string{
 		"-m", modelPath,
 		"--host", "127.0.0.1",
 		"--port", fmt.Sprint(port),
-	)
+	}
+	if proj := projectorFor(modelPath); proj != "" {
+		args = append(args, "--mmproj", proj)
+	}
+
+	cmd := exec.Command(bin, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
