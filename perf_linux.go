@@ -88,5 +88,8 @@ func memoryInfo() (used, total uint64, err error) {
 			memAvailable = v * 1024
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return 0, 0, err
+	}
 	return memTotal - memAvailable, memTotal, nil
 }

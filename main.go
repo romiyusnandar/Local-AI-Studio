@@ -71,6 +71,17 @@ func main() {
 		fmt.Printf("belum ada model STT — taruh file .bin di %s/\n", sttModelDir)
 	}
 
+	if err := ensureImgBackend(); err != nil {
+		fmt.Println("gagal menyiapkan backend image gen:", err)
+		fmt.Println("aplikasi tetap jalan — cek koneksi lalu restart")
+	}
+
+	if models := listImgModels(); len(models) > 0 {
+		setImgActiveModel(models[0])
+	} else {
+		fmt.Printf("belum ada model image gen — taruh file .gguf di %s/\n", imgModelDir)
+	}
+
 	sinyal := make(chan os.Signal, 1)
 	signal.Notify(sinyal, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -79,12 +90,14 @@ func main() {
 		shutdown(getProcess())
 		shutdownTTS(getTTSProcess())
 		shutdownSTT(getSTTProcess())
+		shutdownImg(getImgProcess())
 		os.Exit(0)
 	}()
 
 	go startEngine()
 	go startTTSEngine()
 	go startSTTEngine()
+	go startImgEngine()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
@@ -118,6 +131,16 @@ func main() {
 	http.HandleFunc("/api/stt/models/delete", handleSTTDeleteModel)
 
 	http.HandleFunc("/api/perf", handlePerf)
+
+	http.HandleFunc("/api/img/status", handleImgStatus)
+	http.HandleFunc("/api/img/generate", handleImgGenerate)
+	http.HandleFunc("/api/img/edit", handleImgEdit)
+	http.HandleFunc("/api/img/models", handleImgModelsList)
+	http.HandleFunc("/api/img/models/select", handleImgSelectModel)
+	http.HandleFunc("/api/img/catalog", handleImgCatalog)
+	http.HandleFunc("/api/img/models/download", handleImgDownloadModel)
+	http.HandleFunc("/api/img/models/cancel", handleCancelDownload)
+	http.HandleFunc("/api/img/models/delete", handleImgDeleteModel)
 
 	fmt.Println("buka http://localhost:1420")
 	if err := http.ListenAndServe(uiAddr, nil); err != nil {

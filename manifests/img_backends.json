@@ -1,0 +1,23 @@
+{
+  "version": "master-809-eb7f35c",
+  "backends": [
+    {
+      "os": "windows",
+      "accel": "cpu",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-win-cpu-x64.zip",
+      "entrypoint": "sd-server.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "cpu",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-Linux-Ubuntu-24.04-x86_64.zip",
+      "entrypoint": "sd-server"
+    },
+    {
+      "os": "darwin",
+      "accel": "cpu",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-Darwin-macOS-26.5.2-arm64.zip",
+      "entrypoint": "sd-server"
+    }
+  ]
+}

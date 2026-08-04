@@ -1,0 +1,11 @@
+{
+  "models": [
+    {
+      "name": "Stable Diffusion 1.5 (Q4_0, quantized)",
+      "file": "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+      "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+      "sizeBytes": 1566768416,
+      "note": "Model dasar 512x512, terkuantisasi supaya ringan di CPU."
+    }
+  ]
+}

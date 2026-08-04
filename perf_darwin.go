@@ -17,12 +17,12 @@ func cpuPercent() (float64, error) {
 		return 0, err
 	}
 
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if !strings.HasPrefix(line, "CPU usage:") {
 			continue
 		}
 		// format: "CPU usage: 12.5% user, 3.2% sys, 84.3% idle"
-		for _, part := range strings.Split(line, ",") {
+		for part := range strings.SplitSeq(line, ",") {
 			part = strings.TrimSpace(part)
 			if !strings.Contains(part, "idle") {
 				continue
@@ -58,7 +58,7 @@ func memoryInfo() (used, total uint64, err error) {
 
 	const pageSize = uint64(4096)
 	var free, inactive uint64
-	for _, line := range strings.Split(string(vmOut), "\n") {
+	for line := range strings.SplitSeq(string(vmOut), "\n") {
 		line = strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(line, "Pages free:"):
