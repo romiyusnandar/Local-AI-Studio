@@ -31,6 +31,54 @@ let running = false;
 let forceShutdown = false;
 let activeModel = "";
 
+// loadState menggambarkan progres pemuatan model saat mesin dinyalakan —
+// supaya UI menampilkan fase pemuatan, bukan cuma "menyala…". Diisi dari
+// parsing log llama-server. llama.cpp tidak selalu memberi persentase
+// pemuatan bobot yang bersih, jadi progresnya berbasis fase (memuat →
+// bobot → menyiapkan server → siap).
+let loadState = { active: false, phase: "", progress: 0, current: 0, total: 0, speed: "" };
+
+export function getLoadState() {
+  return loadState;
+}
+
+function setLoad(patch) {
+  loadState = { ...loadState, ...patch, progress: Math.max(loadState.progress || 0, patch.progress ?? 0) };
+}
+
+function beginLoad() {
+  loadState = { active: true, phase: "Memulai mesin…", progress: 0, current: 0, total: 0, speed: "" };
+}
+
+function endLoad() {
+  loadState = { active: false, phase: "", progress: 100, current: 0, total: 0, speed: "" };
+}
+
+const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+// parseLoadLine membaca log llama-server saat startup dan memutakhirkan
+// loadState. Hanya diproses saat load aktif.
+function parseLoadLine(line) {
+  if (!loadState.active) return;
+  const clean = stripAnsi(line);
+  if (/load_model: loading model|loading model '/i.test(clean)) {
+    setLoad({ phase: "Memuat model…", progress: 8 });
+  }
+  if (/load_tensors|loading model tensors|llama_model_loader/i.test(clean)) {
+    setLoad({ phase: "Memuat bobot model…", progress: 30 });
+  }
+  // Beberapa build llama.cpp mencetak persentase pemuatan buffer, mis.
+  // "load_tensors: ... buffer size = ..." atau progres "  - 45 %".
+  const pct = clean.match(/(\d{1,3})\s*%/);
+  if (pct && /load|tensor|buffer/i.test(clean)) {
+    const v = parseInt(pct[1], 10);
+    if (v >= 0 && v <= 100) setLoad({ phase: "Memuat bobot model…", progress: Math.min(90, 30 + Math.round(v * 0.6)) });
+  }
+  if (/model loaded|initializing, n_slots/i.test(clean)) {
+    setLoad({ phase: "Menyiapkan server…", progress: 92 });
+  }
+}
+
 export function isRunning() {
   return running;
 }
@@ -46,7 +94,7 @@ export function getPort() {
 export { isDownloadActive };
 
 export async function status() {
-  return { mesinHidup: running, model: activeModel };
+  return { mesinHidup: running, model: activeModel, load: loadState };
 }
 
 export async function selectModel(model) {
@@ -123,7 +171,19 @@ async function runLlama() {
   const proj = await projectorFor(modelPath);
   if (proj) args.push("--mmproj", proj);
 
-  const child = spawn(bin, args, { stdio: ["ignore", "inherit", "inherit"] });
+  // stdout & stderr di-pipe (bukan "inherit") supaya log pemuatan model
+  // bisa di-parse untuk loadState, sambil tetap diteruskan ke console.
+  const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const tap = (chunk, out) => {
+    const s = chunk.toString();
+    out.write(s);
+    for (const line of s.split(/\r|\n/)) {
+      if (line.trim()) parseLoadLine(line);
+    }
+  };
+  child.stdout.on("data", (c) => tap(c, process.stdout));
+  child.stderr.on("data", (c) => tap(c, process.stderr));
+
   proc = child;
   port = p;
   return child;
@@ -181,11 +241,15 @@ async function monitor(child) {
 
     const pause = failedAttempts * 2000;
     console.log(`mesin berhenti, mencoba lagi dalam ${pause}ms (percobaan ${failedAttempts}/3)`);
+    setLoad({ active: true, phase: `Mesin berhenti tak terduga, mencoba lagi (percobaan ${failedAttempts}/3)…`, progress: 0 });
     await new Promise((r) => setTimeout(r, pause));
 
     try {
+      beginLoad();
+      setLoad({ phase: `Mencoba lagi (percobaan ${failedAttempts}/3)…` });
       child = await runLlama();
       await waitForReady();
+      endLoad();
     } catch (err) {
       console.log("gagal menyalakan ulang:", err.message);
       continue;
@@ -194,11 +258,13 @@ async function monitor(child) {
 }
 
 export async function startEngine() {
+  beginLoad();
   let child;
   try {
     child = await runLlama();
   } catch (err) {
     console.log("gagal menjalankan mesin:", err.message);
+    setLoad({ active: false, phase: `gagal: ${err.message}` });
     return;
   }
 
@@ -207,10 +273,12 @@ export async function startEngine() {
     await waitForReady();
   } catch (err) {
     console.log("mesin tidak siap:", err.message);
+    setLoad({ active: false, phase: `gagal: ${err.message}` });
     shutdown(child);
     return;
   }
   console.log("mesin siap dengan model:", activeModel);
+  endLoad();
 
   monitor(child);
 }

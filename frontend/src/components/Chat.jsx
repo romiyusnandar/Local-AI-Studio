@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Paperclip, Send, X } from "lucide-react";
 import { Api } from "../services/api.js";
+import { engineStatusText } from "../lib/status.js";
 import "./Chat.css";
 
 function fileToDataUrl(file) {
@@ -29,7 +30,8 @@ export default function Chat() {
   useEffect(() => {
     refreshModels();
     refreshStatus();
-    const t = setInterval(refreshStatus, 3000);
+    // 1.2s: cukup responsif untuk menampilkan progres pemuatan model.
+    const t = setInterval(refreshStatus, 1200);
     return () => clearInterval(t);
   }, []);
 
@@ -199,14 +201,13 @@ export default function Chat() {
           <h1>Chat</h1>
           <div className="status-line">
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
-            <span>
-              {status.mesinHidup
-                ? `siap — ${status.model || "model aktif"}`
-                : status.model
-                  ? "mesin chat sedang menyala…"
-                  : "mesin chat mati — pilih model"}
-            </span>
+            <span>{engineStatusText(status, "chat")}</span>
           </div>
+          {!status.mesinHidup && status.load?.active && status.load.progress > 0 && (
+            <div className="load-bar">
+              <i style={{ width: `${status.load.progress}%` }} />
+            </div>
+          )}
         </div>
         <div className="chat-header-right">
           {sessionTokens > 0 && <span className="token-total" title="Total token sesi ini">Σ {sessionTokens.toLocaleString()} token</span>}

@@ -47,9 +47,58 @@ function resetGenState() {
   genState = { active: false, step: 0, steps: 0, speed: "", decoding: false };
 }
 
+// loadState menggambarkan progres pemuatan model saat mesin dinyalakan —
+// supaya UI bisa menampilkan "sedang memuat apa" dengan progres, bukan cuma
+// "menyala…" tanpa kepastian. Diisi dari parsing log sd-server.
+let loadState = { active: false, phase: "", progress: 0, current: 0, total: 0, speed: "" };
+
+export function getLoadState() {
+  return loadState;
+}
+
+function setLoad(patch) {
+  loadState = { ...loadState, ...patch, progress: Math.max(loadState.progress || 0, patch.progress ?? 0) };
+}
+
+function beginLoad() {
+  loadState = { active: true, phase: "Memulai mesin…", progress: 0, current: 0, total: 0, speed: "" };
+}
+
+function endLoad() {
+  loadState = { active: false, phase: "", progress: 100, current: 0, total: 0, speed: "" };
+}
+
 // stripAnsi membuang escape-sequence warna/erase (mis. "\x1b[K") supaya
 // regex progres bisa mencocokkan teks bersih.
 const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+// parseLoadLine membaca log sd-server saat startup dan memutakhirkan
+// loadState (fase + progres pemuatan bobot). Hanya diproses saat load aktif.
+function parseLoadLine(line) {
+  if (!loadState.active) return;
+  const clean = stripAnsi(line);
+
+  if (/loading model from|load .* using .* format|loading model/i.test(clean)) {
+    setLoad({ phase: "Memuat bobot model…", progress: 3 });
+  }
+  // Progress bar pemuatan tensor sd.cpp: "| 12/34 - 5.2MB/s" (bukan it/s
+  // atau s/it yang itu progres generate). current/total = jumlah tensor.
+  const m = clean.match(/\|\s*(\d+)\/(\d+)\s*-\s*([^|]+)$/);
+  if (m && !/it\/s|s\/it/.test(clean)) {
+    const current = parseInt(m[1], 10);
+    const total = parseInt(m[2], 10);
+    setLoad({
+      phase: "Memuat bobot model…",
+      progress: total > 0 ? Math.min(90, Math.round((current / total) * 90)) : loadState.progress,
+      current,
+      total,
+      speed: m[3].trim(),
+    });
+  }
+  if (/loading tensors completed|model files processing completed|total params memory/i.test(clean)) {
+    setLoad({ phase: "Inisialisasi model…", progress: 95, speed: "" });
+  }
+}
 
 // parseGenLine membaca satu baris log sd-server dan memutakhirkan genState.
 // Pola progres sd.cpp: "|####    | 7/20 - 12.05s/it". Hanya diproses saat
@@ -91,7 +140,7 @@ export function getPort() {
 export { isDownloadActive };
 
 export async function status() {
-  return { mesinHidup: running, model: activeModel };
+  return { mesinHidup: running, model: activeModel, load: loadState };
 }
 
 export async function selectModel(model) {
@@ -161,7 +210,9 @@ async function runSD() {
     const s = chunk.toString();
     out.write(s);
     for (const line of s.split(/\r|\n/)) {
-      if (line.trim()) parseGenLine(line);
+      if (!line.trim()) continue;
+      parseLoadLine(line);
+      parseGenLine(line);
     }
   };
   child.stdout.on("data", (c) => tap(c, process.stdout));
@@ -231,11 +282,15 @@ async function monitor(child) {
 
     const pause = failedAttempts * 2000;
     console.log(`mesin image gen berhenti, mencoba lagi dalam ${pause}ms (percobaan ${failedAttempts}/3)`);
+    setLoad({ active: true, phase: `Mesin berhenti tak terduga, mencoba lagi (percobaan ${failedAttempts}/3)…`, progress: 0 });
     await new Promise((r) => setTimeout(r, pause));
 
     try {
+      beginLoad();
+      setLoad({ phase: `Mencoba lagi (percobaan ${failedAttempts}/3)…` });
       child = await runSD();
       await waitForReady();
+      endLoad();
     } catch (err) {
       console.log("gagal menyalakan ulang mesin image gen:", err.message);
       continue;
@@ -244,11 +299,13 @@ async function monitor(child) {
 }
 
 export async function startEngine() {
+  beginLoad();
   let child;
   try {
     child = await runSD();
   } catch (err) {
     console.log("gagal menjalankan mesin image gen:", err.message);
+    setLoad({ active: false, phase: `gagal: ${err.message}` });
     return;
   }
 
@@ -257,10 +314,12 @@ export async function startEngine() {
     await waitForReady();
   } catch (err) {
     console.log("mesin image gen tidak siap:", err.message);
+    setLoad({ active: false, phase: `gagal: ${err.message}` });
     shutdown(child);
     return;
   }
   console.log("mesin image gen siap dengan model:", activeModel);
+  endLoad();
 
   monitor(child);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Image as ImageIcon, Download, Upload, Trash2 } from "lucide-react";
 import { Api } from "../services/api.js";
+import { engineStatusText } from "../lib/status.js";
 import "./ImageGen.css";
 
 export default function ImageGen() {
@@ -28,7 +29,7 @@ export default function ImageGen() {
     refreshModels();
     refreshStatus();
     refreshHistory();
-    const t = setInterval(refreshStatus, 3000);
+    const t = setInterval(refreshStatus, 1200);
     return () => {
       clearInterval(t);
       clearInterval(timerRef.current);
@@ -163,8 +164,13 @@ export default function ImageGen() {
           <h1>Generasi Gambar</h1>
           <div className="status-line">
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
-            <span>{status.mesinHidup ? `siap — ${status.model}` : "mesin image gen mati — pilih model"}</span>
+            <span>{engineStatusText(status, "image gen")}</span>
           </div>
+          {!status.mesinHidup && status.load?.active && status.load.progress > 0 && (
+            <div className="load-bar">
+              <i style={{ width: `${status.load.progress}%` }} />
+            </div>
+          )}
         </div>
         <select value={activeModel} onChange={onSelectModel} disabled={models.length === 0}>
           {models.length === 0 && <option>Belum ada model</option>}
