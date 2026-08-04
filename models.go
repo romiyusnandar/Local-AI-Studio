@@ -47,7 +47,7 @@ func loadCatalog(manifestPath string) (*ModelCatalog, error) {
 
 // safeFilename mengambil nama file dari URL dan menolak apa pun yang bisa
 // keluar dari folder model.
-func safeFilename(raw string) (string, error) {
+func safeFilename(raw, ext string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", fmt.Errorf("URL tidak valid")
@@ -63,36 +63,47 @@ func safeFilename(raw string) (string, error) {
 	if strings.ContainsAny(name, `/\`) || name == ".." {
 		return "", fmt.Errorf("nama file tidak valid")
 	}
-	if !strings.HasSuffix(strings.ToLower(name), ".gguf") {
-		return "", fmt.Errorf("hanya file .gguf yang didukung")
+	if !strings.HasSuffix(strings.ToLower(name), ext) {
+		return "", fmt.Errorf("hanya file %s yang didukung", ext)
 	}
 	return name, nil
 }
 
-// isGGUF memeriksa 4 byte pertama. Pengganti murah untuk SHA256: menangkap
-// kasus paling umum yaitu server mengirim halaman HTML error, bukan model.
-func isGGUF(path string) bool {
+// hasMagic memeriksa byte pertama file. Pengganti murah untuk SHA256:
+// menangkap kasus paling umum yaitu server mengirim halaman HTML error,
+// bukan model.
+func hasMagic(path, magic string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false
 	}
 	defer f.Close()
 
-	magic := make([]byte, 4)
-	if _, err := f.Read(magic); err != nil {
+	buf := make([]byte, len(magic))
+	if _, err := f.Read(buf); err != nil {
 		return false
 	}
-	return string(magic) == "GGUF"
+	return string(buf) == magic
 }
 
-func startModelDownload(rawURL, targetDir string) error {
+func isGGUF(path string) bool {
+	return hasMagic(path, "GGUF")
+}
+
+// isWhisperModel memeriksa magic bytes format ggml ("lmgg") yang dipakai
+// model whisper.cpp (ekstensi .bin, beda dari GGUF).
+func isWhisperModel(path string) bool {
+	return hasMagic(path, "lmgg")
+}
+
+func startModelDownload(rawURL, targetDir, ext string, validate func(string) bool) error {
 	dlMu.Lock()
 	if dlBusy {
 		dlMu.Unlock()
 		return fmt.Errorf("masih ada unduhan berjalan")
 	}
 
-	name, err := safeFilename(rawURL)
+	name, err := safeFilename(rawURL, ext)
 	if err != nil {
 		dlMu.Unlock()
 		return err
@@ -129,10 +140,10 @@ func startModelDownload(rawURL, targetDir string) error {
 			return
 		}
 
-		if !isGGUF(tmp) {
+		if !validate(tmp) {
 			os.Remove(tmp)
 			setProgress(Progress{Done: true, Label: name,
-				Err: "file yang diunduh bukan model GGUF"})
+				Err: "file yang diunduh bukan model yang valid"})
 			return
 		}
 
@@ -203,7 +214,7 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := startModelDownload(req.URL, modelDir); err != nil {
+	if err := startModelDownload(req.URL, modelDir, ".gguf", isGGUF); err != nil {
 		writeJSON(w, http.StatusBadRequest,
 			map[string]any{"error": err.Error()})
 		return

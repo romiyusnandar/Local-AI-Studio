@@ -60,6 +60,17 @@ func main() {
 		fmt.Printf("belum ada model TTS — taruh file .gguf di %s/\n", ttsModelDir)
 	}
 
+	if err := ensureSTTBackend(); err != nil {
+		fmt.Println("gagal menyiapkan backend STT:", err)
+		fmt.Println("aplikasi tetap jalan — cek koneksi lalu restart")
+	}
+
+	if models := listSTTModels(); len(models) > 0 {
+		setSTTActiveModel(models[0])
+	} else {
+		fmt.Printf("belum ada model STT — taruh file .bin di %s/\n", sttModelDir)
+	}
+
 	sinyal := make(chan os.Signal, 1)
 	signal.Notify(sinyal, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -67,11 +78,13 @@ func main() {
 		fmt.Println("\nmenghentikan mesin AI...")
 		shutdown(getProcess())
 		shutdownTTS(getTTSProcess())
+		shutdownSTT(getSTTProcess())
 		os.Exit(0)
 	}()
 
 	go startEngine()
 	go startTTSEngine()
+	go startSTTEngine()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
@@ -94,6 +107,15 @@ func main() {
 	http.HandleFunc("/api/tts/models/download", handleTTSDownloadModel)
 	http.HandleFunc("/api/tts/models/cancel", handleCancelDownload)
 	http.HandleFunc("/api/tts/models/delete", handleTTSDeleteModel)
+
+	http.HandleFunc("/api/stt/status", handleSTTStatus)
+	http.HandleFunc("/api/stt/transcribe", handleSTTTranscribe)
+	http.HandleFunc("/api/stt/models", handleSTTModelsList)
+	http.HandleFunc("/api/stt/models/select", handleSTTSelectModel)
+	http.HandleFunc("/api/stt/catalog", handleSTTCatalog)
+	http.HandleFunc("/api/stt/models/download", handleSTTDownloadModel)
+	http.HandleFunc("/api/stt/models/cancel", handleCancelDownload)
+	http.HandleFunc("/api/stt/models/delete", handleSTTDeleteModel)
 
 	fmt.Println("buka http://localhost:1420")
 	if err := http.ListenAndServe(uiAddr, nil); err != nil {

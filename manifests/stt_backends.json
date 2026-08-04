@@ -1,0 +1,17 @@
+{
+  "version": "v1.9.1",
+  "backends": [
+    {
+      "os": "windows",
+      "accel": "cpu",
+      "url": "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip",
+      "entrypoint": "whisper-server.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "cpu",
+      "url": "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-ubuntu-x64.tar.gz",
+      "entrypoint": "whisper-server"
+    }
+  ]
+}
