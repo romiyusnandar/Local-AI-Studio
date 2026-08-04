@@ -20,6 +20,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [attachedImage, setAttachedImage] = useState(null);
   const [sending, setSending] = useState(false);
+  const [sessionTokens, setSessionTokens] = useState(0);
 
   const abortRef = useRef(null);
   const bodyRef = useRef(null);
@@ -102,7 +103,13 @@ export default function Chat() {
 
     try {
       abortRef.current = new AbortController();
-      const res = await Api.chatStream({ messages: apiMessages, stream: true }, abortRef.current.signal);
+      // stream_options.include_usage minta llama-server mengirim satu chunk
+      // usage terakhir (prompt/completion/total tokens) supaya angkanya pasti,
+      // bukan cuma perkiraan dari jumlah delta.
+      const res = await Api.chatStream(
+        { messages: apiMessages, stream: true, stream_options: { include_usage: true } },
+        abortRef.current.signal
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "permintaan gagal" }));
         throw new Error(err.error || "permintaan gagal");
@@ -112,6 +119,24 @@ export default function Chat() {
       const decoder = new TextDecoder();
       let buf = "";
       let assistantText = "";
+      let tokenCount = 0; // perkiraan live: ~1 token per delta berisi konten
+      let usage = null;
+      let tps = 0;
+      const startedAt = Date.now();
+
+      const pushUpdate = () => {
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            role: "assistant",
+            content: assistantText,
+            tokens: usage ? usage.completion_tokens : tokenCount,
+            total: usage ? usage.total_tokens : null,
+            tps,
+          };
+          return next;
+        });
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -124,20 +149,28 @@ export default function Chat() {
           const payload = line.slice(6).trim();
           if (payload === "[DONE]") continue;
           try {
-            const token = JSON.parse(payload).choices[0].delta.content;
+            const obj = JSON.parse(payload);
+            // chunk usage/timings terakhir: choices kosong, ada angka pasti
+            if (obj.usage) usage = obj.usage;
+            if (obj.timings && obj.timings.predicted_per_second) {
+              tps = Math.round(obj.timings.predicted_per_second);
+            }
+            const token = obj.choices?.[0]?.delta?.content;
             if (token) {
               assistantText += token;
-              setMessages((prev) => {
-                const next = [...prev];
-                next[next.length - 1] = { role: "assistant", content: assistantText };
-                return next;
-              });
+              tokenCount++;
+              const secs = (Date.now() - startedAt) / 1000;
+              if (secs > 0) tps = Math.round(tokenCount / secs);
+              pushUpdate();
             }
           } catch {
             // potongan JSON belum utuh
           }
         }
       }
+      pushUpdate();
+      const used = usage ? usage.total_tokens : tokenCount;
+      if (used) setSessionTokens((n) => n + used);
     } catch (err) {
       if (err.name !== "AbortError") {
         setMessages((prev) => {
@@ -175,14 +208,17 @@ export default function Chat() {
             </span>
           </div>
         </div>
-        <select value={activeModel} onChange={onSelectModel} disabled={models.length === 0}>
-          {models.length === 0 && <option>Belum ada model</option>}
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+        <div className="chat-header-right">
+          {sessionTokens > 0 && <span className="token-total" title="Total token sesi ini">Σ {sessionTokens.toLocaleString()} token</span>}
+          <select value={activeModel} onChange={onSelectModel} disabled={models.length === 0}>
+            {models.length === 0 && <option>Belum ada model</option>}
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="chat-body" ref={bodyRef}>
@@ -196,6 +232,12 @@ export default function Chat() {
             <div className="msg-role">{m.role === "user" ? "kamu" : "asisten"}</div>
             {m.image && <img className="msg-image" src={m.image} alt="lampiran" />}
             <div className="msg-bubble">{m.content}</div>
+            {m.role === "assistant" && m.tokens > 0 && (
+              <div className="msg-stats">
+                {m.tokens} token{m.total ? ` · ${m.total} total` : ""}
+                {m.tps > 0 ? ` · ${m.tps} tok/s` : ""}
+              </div>
+            )}
           </div>
         ))}
       </div>

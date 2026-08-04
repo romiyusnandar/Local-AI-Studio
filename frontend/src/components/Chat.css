@@ -16,6 +16,11 @@
   font-size: 18px;
   margin: 0 0 6px;
 }
+.chat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .chat-header select {
   background: var(--bg-inset);
   border: 1px solid var(--border);
@@ -23,6 +28,12 @@
   padding: 8px 10px;
   border-radius: 3px;
   min-width: 220px;
+}
+.token-total {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--teal);
+  white-space: nowrap;
 }
 
 .chat-body {
@@ -77,6 +88,11 @@
   max-width: 160px;
   border-radius: 3px;
   border: 1px solid var(--border);
+}
+.msg-stats {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-faint);
 }
 
 .composer {

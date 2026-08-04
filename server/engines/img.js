@@ -20,6 +20,7 @@ const ROOT = path.join(__dirname, "..", "..");
 
 export const modelDir = path.join(ROOT, "app", "img-models");
 export const backendDir = path.join(ROOT, "app", "img-backend");
+export const outputsDir = path.join(ROOT, "app", "outputs");
 const manifestPath = path.join(ROOT, "manifests", "img_backends.json");
 const catalogPath = path.join(ROOT, "manifests", "img_models.json");
 const MODEL_EXTS = [".gguf", ".safetensors"];
@@ -31,6 +32,49 @@ let port = 0;
 let running = false;
 let forceShutdown = false;
 let activeModel = "";
+
+// genState menyimpan progres langkah generate yang sedang berjalan, diisi
+// dari parsing stdout/stderr sd-server (baris "step/steps - speed" dan fase
+// "decoding" VAE). Flag active dikendalikan oleh generate()/edit() karena
+// itulah sinyal paling andal kapan sebuah permintaan mulai & selesai.
+let genState = { active: false, step: 0, steps: 0, speed: "", decoding: false };
+
+export function getGenerationState() {
+  return genState;
+}
+
+function resetGenState() {
+  genState = { active: false, step: 0, steps: 0, speed: "", decoding: false };
+}
+
+// stripAnsi membuang escape-sequence warna/erase (mis. "\x1b[K") supaya
+// regex progres bisa mencocokkan teks bersih.
+const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+// parseGenLine membaca satu baris log sd-server dan memutakhirkan genState.
+// Pola progres sd.cpp: "|####    | 7/20 - 12.05s/it". Hanya diproses saat
+// generate memang aktif — kalau tidak, log startup sd-server (mis. "using
+// VAE for encoding / decoding") akan salah dianggap progres.
+function parseGenLine(line) {
+  if (!genState.active) return;
+  const clean = stripAnsi(line);
+  if (/generate_image|generating image/i.test(clean)) {
+    genState.step = 0;
+    genState.steps = 0;
+    genState.speed = "";
+    genState.decoding = false;
+  }
+  const m = clean.match(/\|\s*[^|]*\|\s*(\d+)\/(\d+)\s*-\s*([\d.]+\s*(?:it\/s|s\/it))/);
+  if (m && !genState.decoding) {
+    genState.step = parseInt(m[1], 10);
+    genState.steps = parseInt(m[2], 10);
+    genState.speed = m[3].trim();
+  }
+  if (/decoding|vae\s*decod/i.test(clean)) {
+    genState.decoding = true;
+    genState.speed = "";
+  }
+}
 
 export function isRunning() {
   return running;
@@ -110,7 +154,19 @@ async function runSD() {
   // --listen-port, bukan --host / --port.
   const args = ["-m", modelPath, "--listen-ip", "127.0.0.1", "--listen-port", String(p)];
 
-  const child = spawn(bin, args, { stdio: ["ignore", "inherit", "inherit"] });
+  // stdout & stderr di-pipe (bukan "inherit") supaya bisa di-parse untuk
+  // progres langkah generate, sambil tetap diteruskan ke console apa adanya.
+  const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const tap = (chunk, out) => {
+    const s = chunk.toString();
+    out.write(s);
+    for (const line of s.split(/\r|\n/)) {
+      if (line.trim()) parseGenLine(line);
+    }
+  };
+  child.stdout.on("data", (c) => tap(c, process.stdout));
+  child.stderr.on("data", (c) => tap(c, process.stderr));
+
   proc = child;
   port = p;
   return child;
@@ -253,10 +309,80 @@ async function proxyImageRequest(path_, body, contentType, signal) {
 
 export async function generate(payload, signal) {
   if (!running) throw new Error("mesin image gen sedang mati");
-  return proxyImageRequest("/v1/images/generations", JSON.stringify(payload), "application/json", signal);
+  genState = { active: true, step: 0, steps: 0, speed: "", decoding: false };
+  try {
+    const result = await proxyImageRequest("/v1/images/generations", JSON.stringify(payload), "application/json", signal);
+    await saveToHistory(result, { prompt: payload.prompt || "", size: payload.size || "", mode: "generate" });
+    return result;
+  } finally {
+    resetGenState();
+  }
 }
 
-export async function edit(formBody, contentType, signal) {
+export async function edit(formBody, contentType, signal, meta = {}) {
   if (!running) throw new Error("mesin image gen sedang mati");
-  return proxyImageRequest("/v1/images/edits", formBody, contentType, signal);
+  genState = { active: true, step: 0, steps: 0, speed: "", decoding: false };
+  try {
+    const result = await proxyImageRequest("/v1/images/edits", formBody, contentType, signal);
+    await saveToHistory(result, { prompt: meta.prompt || "", size: meta.size || "", mode: "edit" });
+    return result;
+  } finally {
+    resetGenState();
+  }
+}
+
+// ---------- histori gambar ----------
+
+// saveToHistory menulis gambar hasil + sidecar metadata JSON ke app/outputs/.
+// Kegagalan menyimpan histori tidak boleh menggagalkan permintaan generate,
+// jadi error hanya di-log.
+async function saveToHistory({ buf, contentType }, meta) {
+  try {
+    await fsp.mkdir(outputsDir, { recursive: true });
+    const ext = contentType.split("/")[1] || "png";
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const file = `img-${id}.${ext}`;
+    await fsp.writeFile(path.join(outputsDir, file), buf);
+    await fsp.writeFile(
+      path.join(outputsDir, `img-${id}.json`),
+      JSON.stringify({ file, prompt: meta.prompt, size: meta.size, mode: meta.mode, model: activeModel, createdAt: Date.now() }, null, 2),
+      "utf8"
+    );
+  } catch (err) {
+    console.log("gagal menyimpan histori gambar:", err.message);
+  }
+}
+
+// listHistory mengembalikan daftar gambar tersimpan, terbaru dulu.
+export async function listHistory() {
+  let entries;
+  try {
+    entries = await fsp.readdir(outputsDir);
+  } catch {
+    return [];
+  }
+  const items = [];
+  for (const name of entries) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const meta = JSON.parse(await fsp.readFile(path.join(outputsDir, name), "utf8"));
+      if (meta.file && (await fsp.access(path.join(outputsDir, meta.file)).then(() => true).catch(() => false))) {
+        items.push({ ...meta, url: `/outputs/${encodeURIComponent(meta.file)}` });
+      }
+    } catch {
+      // sidecar rusak, lewati
+    }
+  }
+  return items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+// deleteHistory menghapus satu gambar histori beserta sidecar-nya. Nama file
+// divalidasi agar tidak keluar dari folder outputs (cegah path traversal).
+export async function deleteHistory(file) {
+  if (!file || file.includes("/") || file.includes("\\") || file.includes("..")) {
+    throw new Error("nama file tidak valid");
+  }
+  const base = file.replace(/\.[^.]+$/, "");
+  await fsp.rm(path.join(outputsDir, file), { force: true });
+  await fsp.rm(path.join(outputsDir, `${base}.json`), { force: true });
 }

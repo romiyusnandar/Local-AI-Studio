@@ -23,6 +23,9 @@ const MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
   ".ico": "image/x-icon",
 };
 
@@ -38,6 +41,28 @@ function serveStatic(req, res) {
     return;
   }
 
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not found");
+      return;
+    }
+    const ext = path.extname(filePath);
+    res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
+    res.end(data);
+  });
+}
+
+// serveOutput menyajikan file gambar histori dari app/outputs/. Nama file
+// di-decode dan divalidasi agar tidak keluar dari folder outputs.
+function serveOutput(pathname, res) {
+  const name = decodeURIComponent(pathname.slice("/outputs/".length));
+  const filePath = path.join(img.outputsDir, name);
+  if (!filePath.startsWith(img.outputsDir)) {
+    res.writeHead(400);
+    res.end("Bad request");
+    return;
+  }
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404, { "Content-Type": "text/plain" });
@@ -168,11 +193,29 @@ async function handleImgGenerate(req, res) {
 async function handleImgEdit(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
   try {
-    const { buf, contentType } = await img.edit(Readable.toWeb(req), req.headers["content-type"]);
+    // prompt & size dikirim frontend sebagai query param supaya bisa dicatat
+    // ke histori tanpa harus mem-parse ulang body multipart (yang tetap
+    // diteruskan mentah ke sd-server).
+    const q = new URL(req.url, "http://localhost").searchParams;
+    const meta = { prompt: q.get("prompt") || "", size: q.get("size") || "" };
+    const { buf, contentType } = await img.edit(Readable.toWeb(req), req.headers["content-type"], undefined, meta);
     res.writeHead(200, { "Content-Type": contentType });
     res.end(buf);
   } catch (err) {
     sendJson(res, err.message === "mesin image gen sedang mati" ? 503 : 502, { error: err.message });
+  }
+}
+
+async function handleImgHistoryDelete(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    await img.deleteHistory(body.file);
+    sendJson(res, 200, { ok: true });
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
   }
 }
 
@@ -210,6 +253,9 @@ const routes = {
   "/api/img/status": imgRoutes.status,
   "/api/img/generate": handleImgGenerate,
   "/api/img/edit": handleImgEdit,
+  "/api/img/generation": (req, res) => sendJson(res, 200, img.getGenerationState()),
+  "/api/img/history": (req, res) => img.listHistory().then((h) => sendJson(res, 200, { items: h })),
+  "/api/img/history/delete": handleImgHistoryDelete,
   "/api/img/models": imgRoutes.models,
   "/api/img/models/select": imgRoutes.select,
   "/api/img/catalog": imgRoutes.catalog,
@@ -247,6 +293,11 @@ const server = http.createServer((req, res) => {
 
   if (pathname.startsWith("/api/")) {
     return sendJson(res, 404, { error: "endpoint tidak ditemukan" });
+  }
+
+  // Gambar histori disajikan dari app/outputs/ (di luar folder build frontend).
+  if (pathname.startsWith("/outputs/")) {
+    return serveOutput(pathname, res);
   }
 
   return serveStatic(req, res);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Image as ImageIcon, Download, Upload } from "lucide-react";
+import { Image as ImageIcon, Download, Upload, Trash2 } from "lucide-react";
 import { Api } from "../services/api.js";
 import "./ImageGen.css";
 
@@ -14,22 +14,45 @@ export default function ImageGen() {
   const [sourcePreview, setSourcePreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [gen, setGen] = useState({ active: false, step: 0, steps: 0, speed: "", decoding: false });
   const [resultUrl, setResultUrl] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [history, setHistory] = useState([]);
 
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
+  const genPollRef = useRef(null);
   const urlRef = useRef(null);
 
   useEffect(() => {
     refreshModels();
     refreshStatus();
+    refreshHistory();
     const t = setInterval(refreshStatus, 3000);
     return () => {
       clearInterval(t);
       clearInterval(timerRef.current);
+      clearInterval(genPollRef.current);
     };
   }, []);
+
+  async function refreshHistory() {
+    try {
+      const data = await Api.imgHistory();
+      setHistory(data.items || []);
+    } catch {
+      // diamkan
+    }
+  }
+
+  async function onDeleteHistory(file) {
+    try {
+      await Api.imgDeleteHistory(file);
+      refreshHistory();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
 
   async function refreshStatus() {
     try {
@@ -74,6 +97,20 @@ export default function ImageGen() {
     clearInterval(timerRef.current);
   }
 
+  function startGenPoll() {
+    genPollRef.current = setInterval(async () => {
+      try {
+        setGen(await Api.imgGeneration());
+      } catch {
+        // diamkan
+      }
+    }, 600);
+  }
+  function stopGenPoll() {
+    clearInterval(genPollRef.current);
+    setGen({ active: false, step: 0, steps: 0, speed: "", decoding: false });
+  }
+
   async function onGenerate() {
     if (!status.mesinHidup) {
       alert("Mesin image gen sedang mati — pilih model dulu.");
@@ -92,6 +129,7 @@ export default function ImageGen() {
     setErrorMsg("");
     setElapsed(0);
     startTimer();
+    startGenPoll();
 
     try {
       let blob;
@@ -102,16 +140,18 @@ export default function ImageGen() {
         fd.append("prompt", prompt);
         fd.append("image", sourceFile);
         fd.append("size", size);
-        blob = await Api.imgEdit(fd);
+        blob = await Api.imgEdit(fd, { prompt, size });
       }
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       const url = URL.createObjectURL(blob);
       urlRef.current = url;
       setResultUrl(url);
+      refreshHistory();
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
       stopTimer();
+      stopGenPoll();
       setBusy(false);
     }
   }
@@ -181,7 +221,21 @@ export default function ImageGen() {
         {busy && (
           <div className="img-result generating">
             <div className="spinner" />
-            <span>Membuat gambar… bisa beberapa menit di CPU</span>
+            {gen.decoding ? (
+              <span>Decoding gambar (VAE)…</span>
+            ) : gen.steps > 0 ? (
+              <span>
+                Langkah {gen.step}/{gen.steps}
+                {gen.speed ? ` · ${gen.speed}` : ""}
+              </span>
+            ) : (
+              <span>Menyiapkan generate…</span>
+            )}
+            {gen.steps > 0 && !gen.decoding && (
+              <div className="gen-progress">
+                <i style={{ width: `${Math.round((gen.step / gen.steps) * 100)}%` }} />
+              </div>
+            )}
             <span className="elapsed">{elapsed.toFixed(1)}s</span>
           </div>
         )}
@@ -199,6 +253,27 @@ export default function ImageGen() {
               <Download size={14} />
               <span>Unduh</span>
             </a>
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="img-history">
+            <label className="label">Histori ({history.length})</label>
+            <div className="history-grid">
+              {history.map((h) => (
+                <div className="history-item" key={h.file} title={h.prompt || h.mode}>
+                  <a href={h.url} target="_blank" rel="noreferrer">
+                    <img src={h.url} alt={h.prompt || "gambar"} loading="lazy" />
+                  </a>
+                  <div className="history-meta">
+                    <span className="history-prompt">{h.prompt || (h.mode === "edit" ? "(edit)" : "—")}</span>
+                    <button className="history-del" onClick={() => onDeleteHistory(h.file)} title="Hapus">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

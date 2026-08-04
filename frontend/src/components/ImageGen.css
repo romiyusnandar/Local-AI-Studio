@@ -136,3 +136,67 @@
 .error-text {
   color: #e2574c;
 }
+
+.gen-progress {
+  width: 80%;
+  max-width: 320px;
+  height: 5px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.gen-progress i {
+  display: block;
+  height: 100%;
+  background: var(--amber);
+  transition: width 0.3s ease;
+}
+
+/* ===== Histori gambar ===== */
+.img-history {
+  margin-top: 24px;
+}
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.history-item {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+.history-item img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+}
+.history-prompt {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-del {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+.history-del:hover {
+  color: #e2574c;
+}

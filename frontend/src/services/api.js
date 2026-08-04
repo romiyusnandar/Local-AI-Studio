@@ -82,12 +82,17 @@ export const Api = {
     return res.blob();
   },
 
-  async imgEdit(formData) {
-    const res = await fetch("/api/img/edit", { method: "POST", body: formData });
+  async imgEdit(formData, meta = {}) {
+    const q = new URLSearchParams({ prompt: meta.prompt || "", size: meta.size || "" });
+    const res = await fetch(`/api/img/edit?${q}`, { method: "POST", body: formData });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error((body && body.error) || `mesin image gen gagal (${res.status})`);
     }
     return res.blob();
   },
+
+  imgGeneration: () => j("/api/img/generation"),
+  imgHistory: () => j("/api/img/history"),
+  imgDeleteHistory: (file) => post("/api/img/history/delete", { file }),
 };
