@@ -123,7 +123,9 @@ func fallbackToCPU() error {
 	fmt.Println("backend berakselerasi gagal, mundur ke CPU...")
 
 	// Hapus yang lama supaya tidak tercampur file dari varian berbeda.
-	if err := os.RemoveAll(backendDir); err != nil {
+	// Di Windows, file DLL/exe milik proses yang baru saja mati kadang masih
+	// terkunci sesaat (antivirus, sisa handle) — coba beberapa kali sebelum menyerah.
+	if err := removeAllRetry(backendDir, 5, 500*time.Millisecond); err != nil {
 		return err
 	}
 
@@ -137,6 +139,19 @@ func fallbackToCPU() error {
 	}
 
 	return installBackend(m, entry)
+}
+
+// removeAllRetry mengulang os.RemoveAll beberapa kali dengan jeda. Berguna
+// di Windows saat file masih terkunci sesaat setelah proses pemiliknya mati.
+func removeAllRetry(dir string, attempts int, delay time.Duration) error {
+	var err error
+	for range attempts {
+		if err = os.RemoveAll(dir); err == nil {
+			return nil
+		}
+		time.Sleep(delay)
+	}
+	return err
 }
 
 func backendReady(m *BackendManifest, e *BackendEntry) bool {

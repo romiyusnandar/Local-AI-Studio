@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -154,11 +155,18 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := http.Post(
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost,
 		fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", getPort()),
-		"application/json",
 		r.Body,
 	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError,
+			map[string]any{"error": "gagal menyiapkan permintaan"})
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		setEngine(false)
 		writeJSON(w, http.StatusBadGateway,
@@ -207,12 +215,7 @@ func listModels() []string {
 }
 
 func isValidModel(name string) bool {
-	for _, m := range listModels() {
-		if m == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(listModels(), name)
 }
 
 // ---------- siklus hidup mesin ----------
