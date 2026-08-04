@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 
 //go:embed web
 var file embed.FS
+var portLlama int
 
 func main() {
 	proses, err := runLlama()
@@ -38,7 +40,7 @@ func main() {
 
 	http.HandleFunc("/api/chat", func (w http.ResponseWriter, r *http.Request) {
 		res, err := http.Post(
-			"http://127.0.0.1:8080/v1/chat/completions",
+			fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", portLlama),
 			"application/json",
 			r.Body,
 		)
@@ -73,7 +75,22 @@ func main() {
 	http.ListenAndServe("127.0.0.1:1420", nil)
 }
 
+func emptyPort() (int, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port, nil
+}
+
 func runLlama() (*exec.Cmd, error) {
+	p, err := emptyPort()
+	if err != nil {
+		return nil, err
+	}
+	portLlama = p
+
 	path := "app/backend/llama-server"
 	if runtime.GOOS == "windows" {
 		path += ".exe"
@@ -82,7 +99,7 @@ func runLlama() (*exec.Cmd, error) {
 	cmd := exec.Command(path,
 		"-m", "app/models/model.gguf",
 		"--host", "127.0.0.1",
-		"--port", "8080",
+		"--port", fmt.Sprint(portLlama),
 	)
 
 	// logging
@@ -96,7 +113,7 @@ func waitForReady() error {
 	limit := time.Now().Add(60 * time.Second)
 
 	for time.Now().Before(limit) {
-		res, err := http.Get("http://127.0.0.1:8080/health")
+		res, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", portLlama))
 		if err == nil {
 			res.Body.Close()
 			if res.StatusCode == 200 {
