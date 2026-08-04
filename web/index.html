@@ -2,207 +2,248 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Local AI Studio</title>
-  <style>
-    body { font-family: system-ui; max-width: 680px; margin: 0 auto; padding: 24px; }
-    #status { font-size: 14px; }
-    textarea { width: 100%; box-sizing: border-box; }
-    #hasil { white-space: pre-wrap; background: #f6f6f6; padding: 12px; min-height: 60px; }
-  </style>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <h1>Local AI Studio</h1>
-  <p id="status">memeriksa mesin...</p>
 
-  <div>
-    <label>Model: </label>
-    <select id="model" onchange="gantiModel()"></select>
+  <header class="meterbridge">
+    <div class="wordmark"><span class="dot"></span><span class="full">Local AI Studio</span></div>
+    <div class="meters">
+      <button class="meter" id="meter-cpu" title="Buka System">
+        <span class="meter-label">CPU</span>
+        <span class="meter-bars" id="bars-cpu"></span>
+        <span class="meter-value" id="val-cpu">&mdash;</span>
+      </button>
+      <button class="meter" id="meter-ram" title="Buka System">
+        <span class="meter-label">RAM</span>
+        <span class="meter-bars" id="bars-ram"></span>
+        <span class="meter-value" id="val-ram">&mdash;</span>
+      </button>
+      <button class="meter" id="meter-gpu" title="Buka System" style="display:none">
+        <span class="meter-label">GPU</span>
+        <span class="meter-bars" id="bars-gpu"></span>
+        <span class="meter-value" id="val-gpu">&mdash;</span>
+      </button>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Ganti tema terang/gelap" data-icon="moon"></button>
+  </header>
+
+  <div class="shell">
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-panel="chat">
+        <span class="nav-status" id="nav-status-llm"></span>
+        <span data-icon="chat"></span>
+        <span>Chat</span>
+      </button>
+      <button class="nav-item" data-panel="image">
+        <span class="nav-status" id="nav-status-img"></span>
+        <span data-icon="image"></span>
+        <span>Gambar</span>
+      </button>
+      <button class="nav-item" data-panel="stt">
+        <span class="nav-status" id="nav-status-stt"></span>
+        <span data-icon="mic"></span>
+        <span>Suara&rarr;Teks</span>
+      </button>
+      <button class="nav-item" data-panel="tts">
+        <span class="nav-status" id="nav-status-tts"></span>
+        <span data-icon="waveform"></span>
+        <span>Teks&rarr;Suara</span>
+      </button>
+      <button class="nav-item" data-panel="models">
+        <span data-icon="box"></span>
+        <span>Model</span>
+      </button>
+      <button class="nav-item" data-panel="system">
+        <span data-icon="activity"></span>
+        <span>Sistem</span>
+      </button>
+    </nav>
+
+    <main class="main">
+
+      <!-- ================= CHAT ================= -->
+      <section class="panel active" id="panel-chat">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Chat</h1>
+            <div class="status-line" id="chat-status"><span class="dot"></span><span>memeriksa mesin&hellip;</span></div>
+          </div>
+          <div class="field-group" style="min-width:220px">
+            <select class="field" id="chat-model-select"><option>Memuat model&hellip;</option></select>
+          </div>
+        </div>
+
+        <div class="chat-body" id="chat-body">
+          <div class="empty" id="chat-empty">
+            <span data-icon="chat"></span>
+            <p>Belum ada percakapan. Pilih model lalu ajukan pertanyaan.</p>
+          </div>
+        </div>
+
+        <form class="composer" id="chat-form">
+          <div class="attach-chip" id="chat-attach-chip" style="display:none">
+            <img id="chat-attach-preview" alt="">
+            <span>gambar terlampir</span>
+            <button type="button" id="chat-attach-remove" data-icon="x" aria-label="Hapus lampiran"></button>
+          </div>
+          <div class="composer-row">
+            <button type="button" class="btn btn-icon btn-ghost" id="chat-attach-btn" title="Lampirkan gambar" data-icon="paperclip"></button>
+            <input type="file" id="chat-attach-input" accept="image/*" style="display:none">
+            <textarea class="field" id="chat-input" rows="1" placeholder="Tulis pesan&hellip; (Enter untuk kirim, Shift+Enter baris baru)"></textarea>
+            <button type="submit" class="btn btn-primary btn-icon" id="chat-send" title="Kirim" data-icon="send"></button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ================= IMAGE ================= -->
+      <section class="panel" id="panel-image">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Generasi Gambar</h1>
+            <div class="status-line" id="img-status"><span class="dot"></span><span>memeriksa mesin&hellip;</span></div>
+          </div>
+          <div class="field-group" style="min-width:220px">
+            <select class="field" id="img-model-select"><option>Memuat model&hellip;</option></select>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="mode-toggle" id="img-mode-toggle">
+            <button type="button" class="active" data-mode="generate">Teks &rarr; Gambar</button>
+            <button type="button" data-mode="edit">Edit Gambar</button>
+          </div>
+
+          <div id="img-edit-source" style="display:none; margin-bottom:14px">
+            <label class="label">Gambar sumber</label>
+            <div class="dropzone" id="img-dropzone">
+              <span data-icon="upload"></span>
+              <span id="img-dropzone-text">Klik untuk pilih gambar, atau letakkan di sini</span>
+              <img class="preview" id="img-dropzone-preview" style="display:none">
+            </div>
+            <input type="file" id="img-file-input" accept="image/*" style="display:none">
+          </div>
+
+          <label class="label">Prompt</label>
+          <textarea class="field" id="img-prompt" rows="3" placeholder="Deskripsikan gambar yang ingin dibuat&hellip;" style="margin-bottom:14px"></textarea>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="label">Ukuran</label>
+              <select class="field" id="img-size">
+                <option value="512x512">512 &times; 512</option>
+                <option value="768x768">768 &times; 768</option>
+                <option value="1024x1024">1024 &times; 1024</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="img-generate-btn"><span data-icon="image"></span><span>Buat Gambar</span></button>
+
+          <div class="img-result" id="img-result" style="display:none"></div>
+        </div>
+      </section>
+
+      <!-- ================= STT ================= -->
+      <section class="panel" id="panel-stt">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Suara ke Teks</h1>
+            <div class="status-line" id="stt-status"><span class="dot"></span><span>memeriksa mesin&hellip;</span></div>
+          </div>
+          <div class="field-group" style="min-width:220px">
+            <select class="field" id="stt-model-select"><option>Memuat model&hellip;</option></select>
+          </div>
+        </div>
+        <div class="panel-body narrow">
+          <label class="label">Rekam dari mikrofon</label>
+          <div class="mic-row">
+            <button class="mic-btn" id="mic-btn" aria-label="Mulai rekam" data-icon="mic"></button>
+            <div class="level-meter" id="level-meter"></div>
+          </div>
+
+          <label class="label">Atau unggah file audio</label>
+          <div class="dropzone" id="stt-dropzone" style="margin-bottom:18px">
+            <span data-icon="upload"></span>
+            <span id="stt-dropzone-text">Klik untuk pilih file audio</span>
+          </div>
+          <input type="file" id="stt-file-input" accept="audio/*" style="display:none">
+
+          <label class="label">Transkrip</label>
+          <textarea class="field transcript-box" id="stt-transcript" readonly placeholder="Transkrip akan muncul di sini&hellip;"></textarea>
+          <div style="margin-top:10px; display:flex; gap:8px">
+            <button class="btn btn-sm" id="stt-copy-btn"><span data-icon="copy"></span><span>Salin</span></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TTS ================= -->
+      <section class="panel" id="panel-tts">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Teks ke Suara</h1>
+            <div class="status-line" id="tts-status"><span class="dot"></span><span>memeriksa mesin&hellip;</span></div>
+          </div>
+          <div class="field-group" style="min-width:220px">
+            <select class="field" id="tts-model-select"><option>Memuat model&hellip;</option></select>
+          </div>
+        </div>
+        <div class="panel-body narrow">
+          <label class="label">Teks</label>
+          <textarea class="field" id="tts-text" rows="4" placeholder="Tulis teks yang ingin diucapkan&hellip;" style="margin-bottom:14px"></textarea>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="label">Suara (opsional)</label>
+              <input class="field" id="tts-voice" placeholder="mis. alloy, af_bella&hellip;">
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="tts-speak-btn"><span data-icon="waveform"></span><span>Ucapkan</span></button>
+
+          <div class="audio-result" id="tts-result" style="display:none"></div>
+        </div>
+      </section>
+
+      <!-- ================= MODELS ================= -->
+      <section class="panel" id="panel-models">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Model</h1>
+            <span class="panel-sub">Kelola model untuk tiap mesin</span>
+          </div>
+        </div>
+        <div class="model-tabs" id="model-tabs">
+          <button class="model-tab active" data-kind="llm"><span data-icon="chat"></span>Chat</button>
+          <button class="model-tab" data-kind="img"><span data-icon="image"></span>Gambar</button>
+          <button class="model-tab" data-kind="stt"><span data-icon="mic"></span>Suara&rarr;Teks</button>
+          <button class="model-tab" data-kind="tts"><span data-icon="waveform"></span>Teks&rarr;Suara</button>
+        </div>
+        <div class="panel-body" id="models-body"></div>
+      </section>
+
+      <!-- ================= SYSTEM ================= -->
+      <section class="panel" id="panel-system">
+        <div class="panel-header">
+          <div>
+            <h1 class="panel-title">Sistem</h1>
+            <span class="panel-sub">Pemakaian sumber daya &amp; status mesin, waktu nyata</span>
+          </div>
+          <button class="btn btn-sm btn-ghost" id="system-refresh"><span data-icon="refresh"></span><span>Segarkan</span></button>
+        </div>
+        <div class="panel-body">
+          <div class="grid-cards" id="system-cards"></div>
+          <div class="model-section-title">Status Mesin</div>
+          <div class="engine-grid" id="engine-grid"></div>
+        </div>
+      </section>
+
+    </main>
   </div>
 
-  <details>
-    <summary>Unduh model</summary>
-    <div id="katalog"></div>
-    <p>
-      <input id="urlModel" placeholder="atau tempel URL Hugging Face (.gguf)" style="width:70%">
-      <button onclick="unduhURL()">Unduh</button>
-    </p>
-    <div id="progres"></div>
-  </details>
+  <div class="toasts" id="toasts"></div>
 
-  <p>
-    <textarea id="input" rows="3" placeholder="Tulis pertanyaan..."></textarea>
-    <button id="kirim" onclick="kirim()">Kirim</button>
-  </p>
-
-  <div id="hasil"></div>
-
-  <script>
-    function formatGB(b) {
-      return (b / 1e9).toFixed(1) + " GB";
-    }
-
-    async function muatKatalog() {
-      const res = await fetch("/api/catalog");
-      const data = await res.json();
-      document.getElementById("katalog").innerHTML = data.models.map(m => `
-        <div style="margin:8px 0">
-          <b>${m.name}</b> — ${formatGB(m.sizeBytes)}<br>
-          <small>${m.note || ""}</small><br>
-          ${m.installed
-            ? "<span style='color:green'>✓ terpasang</span>"
-            : `<button onclick="unduh('${m.url}')">Unduh</button>`}
-        </div>
-      `).join("");
-    }
-
-    async function unduh(url) {
-      const res = await fetch("/api/models/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-      const data = await res.json();
-      if (data.error) alert(data.error);
-      pantauProgres();
-    }
-
-    function unduhURL() {
-      unduh(document.getElementById("urlModel").value.trim());
-    }
-
-    async function pantauProgres() {
-      const el = document.getElementById("progres");
-      const timer = setInterval(async () => {
-        const p = await (await fetch("/api/progress")).json();
-
-        if (p.error) {
-          el.innerHTML = `<span style="color:crimson">⚠️ ${p.error}</span>`;
-          clearInterval(timer);
-          return;
-        }
-        if (p.done) {
-          el.textContent = "✓ " + p.label;
-          clearInterval(timer);
-          muatKatalog();
-          muatModel();
-          return;
-        }
-        el.innerHTML = `
-          ${p.label} — ${p.percent}% (${formatGB(p.downloaded)} / ${formatGB(p.total)})
-          <button onclick="fetch('/api/models/cancel',{method:'POST'})">Batal</button>
-        `;
-      }, 500);
-    }
-
-    muatKatalog();
-    
-    async function cekStatus() {
-      const el = document.getElementById("status");
-      try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
-        if (data.mesinHidup) {
-          el.textContent = "🟢 mesin siap — " + data.model;
-          el.style.color = "green";
-        } else {
-          el.textContent = "🔴 mesin mati — cek terminal untuk pesan errornya";
-          el.style.color = "crimson";
-        }
-      } catch {
-        el.textContent = "⚪ aplikasi tidak terjangkau";
-        el.style.color = "gray";
-      }
-    }
-
-    async function muatModel() {
-      const res = await fetch("/api/models");
-      const data = await res.json();
-      const sel = document.getElementById("model");
-
-      if (data.models.length === 0) {
-        sel.innerHTML = "<option>— taruh file .gguf di app/models/ —</option>";
-        return;
-      }
-
-      sel.innerHTML = data.models
-        .map(m => `<option ${m === data.active ? "selected" : ""}>${m}</option>`)
-        .join("");
-    }
-
-    async function gantiModel() {
-      const model = document.getElementById("model").value;
-      const el = document.getElementById("status");
-      el.textContent = "🟡 mengganti model...";
-      el.style.color = "goldenrod";
-
-      await fetch("/api/models/select", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model })
-      });
-      // status akan hijau sendiri lewat cekStatus tiap 3 detik
-    }
-
-    async function kirim() {
-      const teks = document.getElementById("input").value;
-      if (!teks.trim()) return;
-
-      const hasil = document.getElementById("hasil");
-      const tombol = document.getElementById("kirim");
-      hasil.textContent = "";
-      tombol.disabled = true;
-
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: teks }],
-            stream: true
-          })
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          hasil.textContent = "⚠️ " + err.error;
-          return;
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let sisa = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          // Potongan dari jaringan bisa terpotong di tengah baris.
-          // Sisanya disimpan untuk digabung dengan potongan berikutnya.
-          sisa += decoder.decode(value, { stream: true });
-          const baris = sisa.split("\n");
-          sisa = baris.pop();
-
-          for (const b of baris) {
-            if (!b.startsWith("data: ")) continue;
-            const isi = b.slice(6).trim();
-            if (isi === "[DONE]") continue;
-
-            try {
-              const token = JSON.parse(isi).choices[0].delta.content;
-              if (token) hasil.textContent += token;
-            } catch {
-              // potongan JSON belum utuh, abaikan
-            }
-          }
-        }
-      } finally {
-        tombol.disabled = false;
-      }
-    }
-
-    muatModel();
-    cekStatus();
-    setInterval(cekStatus, 3000);
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
