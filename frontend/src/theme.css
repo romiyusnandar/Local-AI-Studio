@@ -1,0 +1,27 @@
+:root {
+  --bg: #15171a;
+  --bg-panel: #1c1f23;
+  --bg-inset: #101214;
+  --bg-hover: #23262b;
+  --border: #2a2e33;
+  --border-strong: #383d44;
+  --text: #e8e6e1;
+  --text-dim: #8b9096;
+  --text-faint: #5a5f66;
+  --amber: #e8a33d;
+  --amber-dim: #7a5a26;
+  --teal: #4fb8a8;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}

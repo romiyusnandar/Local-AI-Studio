@@ -1,12 +1,18 @@
-import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import net from "node:net";
 import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ensureBackendFor, detectAccel } from "../lib/backend-manager.js";
-import { downloadWithResume } from "../lib/download.js";
-import { setProgress, getProgress } from "../lib/progress.js";
+import {
+  listModelsIn,
+  isValidModelIn,
+  startModelDownload as startModelDownloadIn,
+  deleteModelIn,
+  loadCatalog as loadCatalogFrom,
+  isGGUF,
+} from "../lib/models.js";
+import { cancelDownload as cancelDownloadShared, isDownloadActive } from "../lib/download-state.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..", "..");
@@ -15,6 +21,7 @@ export const modelDir = path.join(ROOT, "app", "models");
 export const backendDir = path.join(ROOT, "app", "backend");
 const manifestPath = path.join(ROOT, "manifests", "backends.json");
 const catalogPath = path.join(ROOT, "manifests", "models.json");
+const MODEL_EXTS = [".gguf"];
 
 // ---------- state proses (mirip var package-level di main.go) ----------
 
@@ -23,10 +30,6 @@ let port = 0;
 let running = false;
 let forceShutdown = false;
 let activeModel = "";
-
-// Hanya satu unduhan model sekaligus di seluruh aplikasi.
-let dlBusy = false;
-let dlAbort = null;
 
 export function isRunning() {
   return running;
@@ -40,9 +43,7 @@ export function setActiveModel(name) {
 export function getPort() {
   return port;
 }
-export function isDownloadActive() {
-  return dlBusy;
-}
+export { isDownloadActive };
 
 // ---------- backend ----------
 
@@ -51,22 +52,26 @@ export async function ensureBackend() {
   await ensureBackendFor(backendDir, manifestPath, accel);
 }
 
-// ---------- model ----------
+// ---------- model (delegasi ke lib/models.js yang generik) ----------
 
-export async function listModels() {
-  try {
-    const entries = await fsp.readdir(modelDir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".gguf"))
-      .map((e) => e.name);
-  } catch {
-    return [];
+export const listModels = () => listModelsIn(modelDir, MODEL_EXTS);
+export const isValidModel = (name) => isValidModelIn(modelDir, MODEL_EXTS, name);
+export const loadCatalog = () => loadCatalogFrom(catalogPath);
+export const cancelDownload = cancelDownloadShared;
+
+export function startModelDownload(rawUrl, projectorUrl) {
+  return startModelDownloadIn(rawUrl, modelDir, MODEL_EXTS, isGGUF, projectorUrl);
+}
+
+export async function deleteModel(name) {
+  if (name === activeModel) {
+    shutdown(proc);
+    activeModel = "";
   }
+  await deleteModelIn(modelDir, name);
 }
 
-export async function isValidModel(name) {
-  return (await listModels()).includes(name);
-}
+// ---------- siklus hidup mesin ----------
 
 function emptyPort() {
   return new Promise((resolve, reject) => {
@@ -202,107 +207,4 @@ export async function startEngine() {
 
 export function getProcess() {
   return proc;
-}
-
-// ---------- download model ----------
-
-function safeFilename(rawUrl, exts) {
-  const u = new URL(rawUrl);
-  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("hanya http/https yang didukung");
-  const name = path.basename(u.pathname);
-  if (!name || name === "." || name === "/") throw new Error("nama file tidak bisa ditentukan dari URL");
-  if (name.includes("/") || name.includes("\\") || name === "..") throw new Error("nama file tidak valid");
-  const lower = name.toLowerCase();
-  if (!exts.some((e) => lower.endsWith(e))) throw new Error(`hanya file ${exts.join("/")} yang didukung`);
-  return name;
-}
-
-async function isGGUF(filePath) {
-  const fh = await fsp.open(filePath, "r");
-  try {
-    const buf = Buffer.alloc(4);
-    await fh.read(buf, 0, 4, 0);
-    return buf.toString("utf8") === "GGUF";
-  } finally {
-    await fh.close();
-  }
-}
-
-async function downloadAndValidate(rawUrl, targetDir, exts, validate, signal) {
-  const name = safeFilename(rawUrl, exts);
-  const final = path.join(targetDir, name);
-  const tmp = final + ".part";
-  await downloadWithResume(rawUrl, tmp, signal);
-  if (!(await validate(tmp))) {
-    await fsp.rm(tmp, { force: true });
-    throw new Error("file yang diunduh bukan model yang valid");
-  }
-  await fsp.rename(tmp, final);
-  return name;
-}
-
-export async function startModelDownload(rawUrl, projectorUrl) {
-  if (dlBusy) throw new Error("masih ada unduhan berjalan");
-
-  const name = safeFilename(rawUrl, [".gguf"]);
-  const final = path.join(modelDir, name);
-  if (fs.existsSync(final)) throw new Error(`model "${name}" sudah ada`);
-
-  const controller = new AbortController();
-  dlAbort = controller;
-  dlBusy = true;
-  setProgress({ active: true, label: `Mengunduh ${name}` });
-
-  (async () => {
-    try {
-      await fsp.mkdir(modelDir, { recursive: true });
-      await downloadAndValidate(rawUrl, modelDir, [".gguf"], isGGUF, controller.signal);
-      console.log("model terunduh:", name);
-
-      if (projectorUrl) {
-        setProgress({ active: true, label: `Mengunduh proyektor untuk ${name}` });
-        const projName = await downloadAndValidate(projectorUrl, modelDir, [".gguf"], isGGUF, controller.signal);
-        await fsp.writeFile(final + ".mmproj", projName, "utf8");
-        console.log("proyektor terunduh:", projName);
-      }
-
-      setProgress({ done: true, percent: 100, label: `${name} siap` });
-    } catch (err) {
-      setProgress({ done: true, error: err.message, label: name });
-    } finally {
-      dlBusy = false;
-      dlAbort = null;
-    }
-  })();
-}
-
-export function cancelDownload() {
-  if (!dlAbort) return false;
-  dlAbort.abort();
-  return true;
-}
-
-async function removeProjectorSidecar(dir, model) {
-  const sidecar = path.join(dir, model) + ".mmproj";
-  try {
-    const projName = (await fsp.readFile(sidecar, "utf8")).trim();
-    if (projName) await fsp.rm(path.join(dir, projName), { force: true });
-  } catch {
-    // tidak ada sidecar, tidak apa-apa
-  }
-  await fsp.rm(sidecar, { force: true });
-}
-
-export async function deleteModel(name) {
-  if (name === activeModel) {
-    shutdown(proc);
-    activeModel = "";
-  }
-  await fsp.rm(path.join(modelDir, name), { force: true });
-  await removeProjectorSidecar(modelDir, name);
-}
-
-export async function loadCatalog() {
-  const raw = await fsp.readFile(catalogPath, "utf8");
-  return JSON.parse(raw);
 }

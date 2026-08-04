@@ -22,14 +22,20 @@ function post(url, payload) {
   });
 }
 
+// kind: "llm" | "tts" | "stt" | "img" -> base path API. Baru "llm" yang
+// punya endpoint sungguhan sekarang — sisanya ditambah begitu fase-nya
+// dikerjakan (tanpa perlu ubah kode di sini lagi, cukup tambah entri).
+const BASE = { llm: "/api" };
+
 export const Api = {
-  status: () => j("/api/status"),
-  models: () => j("/api/models"),
-  catalog: () => j("/api/catalog"),
-  selectModel: (model) => post("/api/models/select", { model }),
-  downloadModel: (url, projectorUrl) => post("/api/models/download", { url, projectorUrl }),
-  cancelDownload: () => post("/api/models/cancel"),
-  deleteModel: (model) => post("/api/models/delete", { model }),
+  status: (kind = "llm") => j(`${BASE[kind]}/status`),
+  models: (kind = "llm") => j(kind === "llm" ? "/api/models" : `${BASE[kind]}/models`),
+  catalog: (kind = "llm") => j(kind === "llm" ? "/api/catalog" : `${BASE[kind]}/catalog`),
+  selectModel: (kind, model) => post(kind === "llm" ? "/api/models/select" : `${BASE[kind]}/models/select`, { model }),
+  downloadModel: (kind, url, projectorUrl) =>
+    post(kind === "llm" ? "/api/models/download" : `${BASE[kind]}/models/download`, projectorUrl ? { url, projectorUrl } : { url }),
+  cancelDownload: (kind = "llm") => post(kind === "llm" ? "/api/models/cancel" : `${BASE[kind]}/models/cancel`),
+  deleteModel: (kind, model) => post(kind === "llm" ? "/api/models/delete" : `${BASE[kind]}/models/delete`, { model }),
   progress: () => j("/api/progress"),
 
   chatStream(body, signal) {

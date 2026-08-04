@@ -1,7 +1,20 @@
+import { useState } from "react";
+import Sidebar from "./components/Sidebar.jsx";
 import Chat from "./components/Chat.jsx";
+import ModelManager from "./components/ModelManager.jsx";
 
 function App() {
-  return <Chat />;
+  const [panel, setPanel] = useState("chat");
+
+  return (
+    <div style={{ display: "flex", height: "100vh" }}>
+      <Sidebar active={panel} onSelect={setPanel} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {panel === "chat" && <Chat />}
+        {panel === "models" && <ModelManager />}
+      </div>
+    </div>
+  );
 }
 
 export default App;

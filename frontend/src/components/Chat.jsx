@@ -58,7 +58,7 @@ export default function Chat() {
     const model = e.target.value;
     setActiveModel(model);
     try {
-      await Api.selectModel(model);
+      await Api.selectModel("llm", model);
     } catch (err) {
       alert(err.message);
     }
