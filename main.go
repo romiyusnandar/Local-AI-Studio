@@ -9,27 +9,46 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"sync"
+	"syscall"
 	"time"
 )
 
-//go:embed web
-var file embed.FS
-var portLlama int
+
+var (
+	//go:embed web
+	file embed.FS
+	portLlama	  int
+
+	mu 			  sync.Mutex
+	engineRunning bool
+)
 
 func main() {
 	proses, err := runLlama()
 	if err != nil {
 		fmt.Println("gagal menjalankan LLaMA:", err)
 	}
-	defer proses.Process.Kill()
+
+	sinyal := make(chan os.Signal, 1)
+	signal.Notify(sinyal, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sinyal
+		fmt.Println("menerima sinyal, menghentikan LLaMA...")
+		shutdown(proses)
+		os.Exit(0)
+	}()
 
 	fmt.Println("menunggu mesin siap...")
 	if err := waitForReady(); err != nil {
 		fmt.Println("mesin tidak siap:", err)
+		shutdown(proses)
 		return
 	}
 	fmt.Println("mesin siap!")
+	go monitor(proses)
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 
@@ -45,7 +64,10 @@ func main() {
 			r.Body,
 		)
 		if err != nil {
-			http.Error(w, "Gagal menghubungi LLaMA", 502)
+			setEngine(false)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(502)
+			fmt.Fprintf(w, `{"error":"gagal menghubungi LLaMA: %q"}`, err)
 			return
 		}
 		defer res.Body.Close()
@@ -71,8 +93,49 @@ func main() {
 		}
 	})
 
+	http.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"mesinHidup":%t}`, isEngineRunning())
+	})
+
 	fmt.Println("buka http://localhost:1420")
 	http.ListenAndServe("127.0.0.1:1420", nil)
+}
+
+func monitor(cmd *exec.Cmd) {
+	setEngine(true)
+
+	err := cmd.Wait()
+
+	setEngine(false)
+	fmt.Println("mesin berhenti:", err)
+}
+
+func setEngine(v bool) {
+	mu.Lock()
+	engineRunning = v
+	mu.Unlock()
+}
+
+func isEngineRunning() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return engineRunning
+}
+
+func shutdown(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	
+	if runtime.GOOS == "windows" {
+		exec.Command("taskkill", "/PID",
+			fmt.Sprint(cmd.Process.Pid), "/T", "/F").Run()
+	} else {
+		cmd.Process.Kill()
+	}
+
+	time.Sleep(200 * time.Millisecond)
 }
 
 func emptyPort() (int, error) {

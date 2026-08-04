@@ -3,12 +3,34 @@
 <head><meta charset="utf-8"><title>Studio</title></head>
 <body style="font-family: system-ui; max-width: 640px; padding: 24px">
   <h1>Local AI Studio</h1>
+  <p id="status">memeriksa mesin...</p>
 
   <textarea id="input" rows="3" style="width:100%"></textarea>
   <button onclick="kirim()">Kirim</button>
   <pre id="hasil" style="white-space: pre-wrap"></pre>
 
   <script>
+    async function cekStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        const el = document.getElementById("status");
+
+        if (data.mesinHidup) {
+          el.textContent = "🟢 mesin siap";
+          el.style.color = "green";
+        } else {
+          el.textContent = "🔴 mesin mati — cek terminal untuk pesan errornya";
+          el.style.color = "crimson";
+        }
+      } catch (e) {
+        document.getElementById("status").textContent = "⚪ aplikasi tidak terjangkau";
+      }
+    }
+
+    cekStatus();
+    setInterval(cekStatus, 3000);
+    
     async function kirim() {
       const teks = document.getElementById("input").value;
       const hasil = document.getElementById("hasil");
