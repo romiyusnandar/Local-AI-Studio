@@ -1,0 +1,35 @@
+{
+  "version": "b10256",
+  "backends": [
+    {
+      "os": "windows",
+      "accel": "vulkan",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-win-vulkan-x64.zip",
+      "entrypoint": "llama-server.exe"
+    },
+    {
+      "os": "windows",
+      "accel": "cpu",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-win-cpu-x64.zip",
+      "entrypoint": "llama-server.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "cpu",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-ubuntu-x64.tar.gz",
+      "entrypoint": "llama-server"
+    },
+    {
+      "os": "linux",
+      "accel": "vulkan",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-ubuntu-vulkan-x64.tar.gz",
+      "entrypoint": "llama-server"
+    },
+    {
+      "os": "darwin",
+      "accel": "metal",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-macos-arm64.tar.gz",
+      "entrypoint": "llama-server"
+    }
+  ]
+}

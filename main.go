@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net"
@@ -9,10 +10,18 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+)
+
+const (
+	modelDir   = "app/models"
+	backendDir = "app/backend"
+	uiAddr     = "127.0.0.1:1420"
 )
 
 var (
@@ -24,12 +33,19 @@ var (
 	engineRunning  bool
 	forceShutdown  bool
 	runningProcess *exec.Cmd
+	activeModel    string
 )
 
 func main() {
-	if _, err := runLlama(); err != nil {
-		fmt.Println("gagal menjalankan LLaMA:", err)
-		return
+	if err := ensureBackend(); err != nil {
+		fmt.Println("gagal menyiapkan backend:", err)
+		fmt.Println("aplikasi tetap jalan — cek koneksi lalu restart")
+	}
+
+	if models := listModels(); len(models) > 0 {
+		setActiveModel(models[0])
+	} else {
+		fmt.Printf("belum ada model — taruh file .gguf di %s/\n", modelDir)
 	}
 
 	sinyal := make(chan os.Signal, 1)
@@ -41,22 +57,19 @@ func main() {
 		os.Exit(0)
 	}()
 
-	fmt.Println("menunggu mesin siap...")
-	if err := waitForReady(); err != nil {
-		fmt.Println("mesin tidak siap:", err)
-		shutdown(getProcess())
-		return
-	}
-	fmt.Println("mesin siap!")
-
-	go monitor(getProcess())
+	go startEngine()
 
 	http.Handle("/", http.FileServer(http.FS(sub())))
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/chat", handleChat)
+	http.HandleFunc("/api/models", handleModels)
+	http.HandleFunc("/api/models/select", handleSelectModel)
+	http.HandleFunc("/api/progress", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, getProgress())
+	})
 
 	fmt.Println("buka http://localhost:1420")
-	if err := http.ListenAndServe("127.0.0.1:1420", nil); err != nil {
+	if err := http.ListenAndServe(uiAddr, nil); err != nil {
 		fmt.Println("server berhenti:", err)
 	}
 }
@@ -64,23 +77,76 @@ func main() {
 // ---------- handler ----------
 
 func handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"mesinHidup":%t}`, isEngineRunning())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mesinHidup": isEngineRunning(),
+		"model":      getActiveModel(),
+	})
+}
+
+func handleModels(w http.ResponseWriter, r *http.Request) {
+	models := listModels()
+	if models == nil {
+		models = []string{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"models": models,
+		"active": getActiveModel(),
+		"ready":  isEngineRunning(),
+	})
+}
+
+func handleSelectModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed,
+			map[string]any{"error": "gunakan POST"})
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest,
+			map[string]any{"error": "permintaan tidak valid"})
+		return
+	}
+
+	if !isValidModel(req.Model) {
+		writeJSON(w, http.StatusBadRequest,
+			map[string]any{"error": "model tidak ditemukan"})
+		return
+	}
+
+	if req.Model == getActiveModel() && isEngineRunning() {
+		writeJSON(w, http.StatusOK,
+			map[string]any{"ok": true, "model": req.Model, "note": "sudah aktif"})
+		return
+	}
+
+	if p := getProcess(); p != nil {
+		shutdown(p)
+	}
+	setForceShutdown(false)
+	setActiveModel(req.Model)
+
+	go startEngine()
+
+	writeJSON(w, http.StatusOK,
+		map[string]any{"ok": true, "model": req.Model})
 }
 
 func handleChat(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if !isEngineRunning() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprint(w, `{"error":"mesin AI sedang mati"}`)
+		writeJSON(w, http.StatusServiceUnavailable,
+			map[string]any{"error": "mesin AI sedang mati"})
 		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `{"error":"streaming tidak didukung"}`)
+		writeJSON(w, http.StatusInternalServerError,
+			map[string]any{"error": "streaming tidak didukung"})
 		return
 	}
 
@@ -91,8 +157,8 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		setEngine(false)
-		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprint(w, `{"error":"mesin AI tidak merespons"}`)
+		writeJSON(w, http.StatusBadGateway,
+			map[string]any{"error": "mesin AI tidak merespons"})
 		return
 	}
 	defer res.Body.Close()
@@ -116,21 +182,78 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ---------- model ----------
+
+func listModels() []string {
+	entries, err := os.ReadDir(modelDir)
+	if err != nil {
+		return nil
+	}
+
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(strings.ToLower(e.Name()), ".gguf") {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
+func isValidModel(name string) bool {
+	for _, m := range listModels() {
+		if m == name {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------- siklus hidup mesin ----------
 
+func startEngine() {
+	cmd, err := runLlama()
+	if err != nil {
+		fmt.Println("gagal menjalankan mesin:", err)
+		return
+	}
+
+	fmt.Println("menunggu mesin siap...")
+	if err := waitForReady(); err != nil {
+		fmt.Println("mesin tidak siap:", err)
+		shutdown(cmd)
+		return
+	}
+	fmt.Println("mesin siap dengan model:", getActiveModel())
+
+	monitor(cmd)
+}
+
 func runLlama() (*exec.Cmd, error) {
+	model := getActiveModel()
+	if model == "" {
+		return nil, fmt.Errorf("belum ada model yang dipilih")
+	}
+
+	modelPath := filepath.Join(modelDir, model)
+	if _, err := os.Stat(modelPath); err != nil {
+		return nil, fmt.Errorf("model %q tidak ditemukan", model)
+	}
+
 	port, err := emptyPort()
 	if err != nil {
 		return nil, err
 	}
 
-	path := "app/backend/llama-server"
+	bin := filepath.Join(backendDir, "llama-server")
 	if runtime.GOOS == "windows" {
-		path += ".exe"
+		bin += ".exe"
 	}
 
-	cmd := exec.Command(path,
-		"-m", "app/models/model.gguf",
+	cmd := exec.Command(bin,
+		"-m", modelPath,
 		"--host", "127.0.0.1",
 		"--port", fmt.Sprint(port),
 	)
@@ -166,7 +289,24 @@ func monitor(cmd *exec.Cmd) {
 		failedAttempts++
 		if failedAttempts > 3 {
 			fmt.Println("mesin gagal 3 kali berturut-turut, berhenti mencoba")
-			return
+
+			if err := fallbackToCPU(); err != nil {
+				fmt.Println("gagal beralih ke CPU:", err)
+				return
+			}
+
+			failedAttempts = 0
+			newCmd, err := runLlama()
+			if err != nil {
+				fmt.Println("gagal menyalakan ulang backend CPU:", err)
+				return
+			}
+			if err := waitForReady(); err != nil {
+				fmt.Println("mesin CPU tidak siap:", err)
+				return
+			}
+			cmd = newCmd
+			continue
 		}
 
 		pause := time.Duration(failedAttempts) * 2 * time.Second
@@ -266,7 +406,25 @@ func isForceShutdown() bool {
 	return forceShutdown
 }
 
+func setActiveModel(name string) {
+	mu.Lock()
+	activeModel = name
+	mu.Unlock()
+}
+
+func getActiveModel() string {
+	mu.Lock()
+	defer mu.Unlock()
+	return activeModel
+}
+
 // ---------- lain-lain ----------
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
+}
 
 func emptyPort() (int, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

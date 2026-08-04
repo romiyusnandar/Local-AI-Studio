@@ -1,76 +1,139 @@
 <!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Studio</title></head>
-<body style="font-family: system-ui; max-width: 640px; padding: 24px">
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Local AI Studio</title>
+  <style>
+    body { font-family: system-ui; max-width: 680px; margin: 0 auto; padding: 24px; }
+    #status { font-size: 14px; }
+    textarea { width: 100%; box-sizing: border-box; }
+    #hasil { white-space: pre-wrap; background: #f6f6f6; padding: 12px; min-height: 60px; }
+  </style>
+</head>
+<body>
   <h1>Local AI Studio</h1>
   <p id="status">memeriksa mesin...</p>
 
-  <textarea id="input" rows="3" style="width:100%"></textarea>
-  <button onclick="kirim()">Kirim</button>
-  <pre id="hasil" style="white-space: pre-wrap"></pre>
+  <div>
+    <label>Model: </label>
+    <select id="model" onchange="gantiModel()"></select>
+  </div>
+
+  <p>
+    <textarea id="input" rows="3" placeholder="Tulis pertanyaan..."></textarea>
+    <button id="kirim" onclick="kirim()">Kirim</button>
+  </p>
+
+  <div id="hasil"></div>
 
   <script>
     async function cekStatus() {
+      const el = document.getElementById("status");
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
-        const el = document.getElementById("status");
-
         if (data.mesinHidup) {
-          el.textContent = "🟢 mesin siap";
+          el.textContent = "🟢 mesin siap — " + data.model;
           el.style.color = "green";
         } else {
           el.textContent = "🔴 mesin mati — cek terminal untuk pesan errornya";
           el.style.color = "crimson";
         }
-      } catch (e) {
-        document.getElementById("status").textContent = "⚪ aplikasi tidak terjangkau";
+      } catch {
+        el.textContent = "⚪ aplikasi tidak terjangkau";
+        el.style.color = "gray";
       }
     }
 
-    cekStatus();
-    setInterval(cekStatus, 3000);
-    
-    async function kirim() {
-      const teks = document.getElementById("input").value;
-      const hasil = document.getElementById("hasil");
-      hasil.textContent = "";
+    async function muatModel() {
+      const res = await fetch("/api/models");
+      const data = await res.json();
+      const sel = document.getElementById("model");
 
-      const res = await fetch("/api/chat", {
+      if (data.models.length === 0) {
+        sel.innerHTML = "<option>— taruh file .gguf di app/models/ —</option>";
+        return;
+      }
+
+      sel.innerHTML = data.models
+        .map(m => `<option ${m === data.active ? "selected" : ""}>${m}</option>`)
+        .join("");
+    }
+
+    async function gantiModel() {
+      const model = document.getElementById("model").value;
+      const el = document.getElementById("status");
+      el.textContent = "🟡 mengganti model...";
+      el.style.color = "goldenrod";
+
+      await fetch("/api/models/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: teks }],
-          stream: true
-        })
+        body: JSON.stringify({ model })
       });
+      // status akan hijau sendiri lewat cekStatus tiap 3 detik
+    }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let sisa = "";
+    async function kirim() {
+      const teks = document.getElementById("input").value;
+      if (!teks.trim()) return;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const hasil = document.getElementById("hasil");
+      const tombol = document.getElementById("kirim");
+      hasil.textContent = "";
+      tombol.disabled = true;
 
-        sisa += decoder.decode(value, { stream: true });
-        const baris = sisa.split("\n");
-        sisa = baris.pop();
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: teks }],
+            stream: true
+          })
+        });
 
-        for (const b of baris) {
-          if (!b.startsWith("data: ")) continue;
-          const isi = b.slice(6).trim();
-          if (isi === "[DONE]") continue;
+        if (!res.ok) {
+          const err = await res.json();
+          hasil.textContent = "⚠️ " + err.error;
+          return;
+        }
 
-          try {
-            const token = JSON.parse(isi).choices[0].delta.content;
-            if (token) hasil.textContent += token;
-          } catch (e) {
-            // potongan JSON belum utuh, abaikan
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let sisa = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // Potongan dari jaringan bisa terpotong di tengah baris.
+          // Sisanya disimpan untuk digabung dengan potongan berikutnya.
+          sisa += decoder.decode(value, { stream: true });
+          const baris = sisa.split("\n");
+          sisa = baris.pop();
+
+          for (const b of baris) {
+            if (!b.startsWith("data: ")) continue;
+            const isi = b.slice(6).trim();
+            if (isi === "[DONE]") continue;
+
+            try {
+              const token = JSON.parse(isi).choices[0].delta.content;
+              if (token) hasil.textContent += token;
+            } catch {
+              // potongan JSON belum utuh, abaikan
+            }
           }
         }
+      } finally {
+        tombol.disabled = false;
       }
     }
+
+    muatModel();
+    cekStatus();
+    setInterval(cekStatus, 3000);
   </script>
 </body>
 </html>
