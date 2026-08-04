@@ -19,6 +19,16 @@
     <select id="model" onchange="gantiModel()"></select>
   </div>
 
+  <details>
+    <summary>Unduh model</summary>
+    <div id="katalog"></div>
+    <p>
+      <input id="urlModel" placeholder="atau tempel URL Hugging Face (.gguf)" style="width:70%">
+      <button onclick="unduhURL()">Unduh</button>
+    </p>
+    <div id="progres"></div>
+  </details>
+
   <p>
     <textarea id="input" rows="3" placeholder="Tulis pertanyaan..."></textarea>
     <button id="kirim" onclick="kirim()">Kirim</button>
@@ -27,6 +37,65 @@
   <div id="hasil"></div>
 
   <script>
+    function formatGB(b) {
+      return (b / 1e9).toFixed(1) + " GB";
+    }
+
+    async function muatKatalog() {
+      const res = await fetch("/api/catalog");
+      const data = await res.json();
+      document.getElementById("katalog").innerHTML = data.models.map(m => `
+        <div style="margin:8px 0">
+          <b>${m.name}</b> — ${formatGB(m.sizeBytes)}<br>
+          <small>${m.note || ""}</small><br>
+          ${m.installed
+            ? "<span style='color:green'>✓ terpasang</span>"
+            : `<button onclick="unduh('${m.url}')">Unduh</button>`}
+        </div>
+      `).join("");
+    }
+
+    async function unduh(url) {
+      const res = await fetch("/api/models/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      if (data.error) alert(data.error);
+      pantauProgres();
+    }
+
+    function unduhURL() {
+      unduh(document.getElementById("urlModel").value.trim());
+    }
+
+    async function pantauProgres() {
+      const el = document.getElementById("progres");
+      const timer = setInterval(async () => {
+        const p = await (await fetch("/api/progress")).json();
+
+        if (p.error) {
+          el.innerHTML = `<span style="color:crimson">⚠️ ${p.error}</span>`;
+          clearInterval(timer);
+          return;
+        }
+        if (p.done) {
+          el.textContent = "✓ " + p.label;
+          clearInterval(timer);
+          muatKatalog();
+          muatModel();
+          return;
+        }
+        el.innerHTML = `
+          ${p.label} — ${p.percent}% (${formatGB(p.downloaded)} / ${formatGB(p.total)})
+          <button onclick="fetch('/api/models/cancel',{method:'POST'})">Batal</button>
+        `;
+      }, 500);
+    }
+
+    muatKatalog();
+    
     async function cekStatus() {
       const el = document.getElementById("status");
       try {

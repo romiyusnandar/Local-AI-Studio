@@ -64,6 +64,10 @@ func main() {
 	http.HandleFunc("/api/chat", handleChat)
 	http.HandleFunc("/api/models", handleModels)
 	http.HandleFunc("/api/models/select", handleSelectModel)
+	http.HandleFunc("/api/catalog", handleCatalog)
+	http.HandleFunc("/api/models/download", handleDownloadModel)
+	http.HandleFunc("/api/models/cancel", handleCancelDownload)
+	http.HandleFunc("/api/models/delete", handleDeleteModel)
 	http.HandleFunc("/api/progress", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, getProgress())
 	})

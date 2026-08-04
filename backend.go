@@ -218,13 +218,17 @@ func installBackend(m *BackendManifest, entry *BackendEntry) error {
 // ---------- unduh ----------
 
 func download(url, dest string) error {
+	return downloadCtx(context.Background(), url, dest)
+}
+
+func downloadCtx(ctx context.Context, url, dest string) error {
 	// Kalau ada sisa unduhan sebelumnya, lanjutkan dari situ.
 	var start int64
 	if fi, err := os.Stat(dest); err == nil {
 		start = fi.Size()
 	}
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
