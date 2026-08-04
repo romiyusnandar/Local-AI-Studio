@@ -1,0 +1,141 @@
+.system-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.system-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.system-header h1 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+.system-header .sub {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.system-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.system-loading {
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  padding: 16px;
+}
+.card-label {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.card-value {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 26px;
+  font-weight: 600;
+}
+.card-value small {
+  font-size: 13px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.bar-track {
+  height: 6px;
+  background: var(--bg-inset);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.bar-track i {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+}
+.bar-track i.hot {
+  background: var(--amber);
+}
+.bar-track i.crit {
+  background: var(--red);
+}
+.card-sub {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 6px;
+}
+
+.model-section-title {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 22px 0 10px;
+}
+
+.engine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+.engine-card {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.engine-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.engine-name {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+}
+.engine-name svg {
+  color: var(--text-dim);
+}
+.engine-model {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

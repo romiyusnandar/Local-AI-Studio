@@ -9,6 +9,7 @@ import * as stt from "./engines/stt.js";
 import * as tts from "./engines/tts.js";
 import * as img from "./engines/img.js";
 import { getProgress } from "./lib/progress.js";
+import { getStats } from "./lib/perf.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -217,6 +218,20 @@ const routes = {
   "/api/img/models/delete": imgRoutes.delete,
 
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
+
+  "/api/perf": async (req, res) => {
+    const [stats, llmStatus, sttStatus, ttsStatus, imgStatus] = await Promise.all([
+      getStats(),
+      llm.status(),
+      stt.status(),
+      tts.status(),
+      img.status(),
+    ]);
+    sendJson(res, 200, {
+      ...stats,
+      engines: { llm: llmStatus, stt: sttStatus, tts: ttsStatus, img: imgStatus },
+    });
+  },
 };
 
 const server = http.createServer((req, res) => {

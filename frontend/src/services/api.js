@@ -34,6 +34,7 @@ export const Api = {
   cancelDownload: (kind = "llm") => post(`${BASE[kind]}/models/cancel`),
   deleteModel: (kind, model) => post(`${BASE[kind]}/models/delete`, { model }),
   progress: () => j("/api/progress"),
+  perf: () => j("/api/perf"),
 
   chatStream(body, signal) {
     return fetch("/api/chat", {

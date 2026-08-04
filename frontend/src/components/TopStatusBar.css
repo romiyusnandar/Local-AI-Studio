@@ -1,0 +1,84 @@
+.meterbridge {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.wordmark {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wordmark .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
+}
+
+.meters {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+  flex: none;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+}
+.meter-label {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+.meter-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.meter-bars i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  background: var(--border-strong);
+  border-radius: 1px;
+  transition: background-color 0.15s ease;
+}
+.meter-bars i.lit {
+  background: var(--teal);
+}
+.meter-bars i.lit.hot {
+  background: var(--amber);
+}
+.meter-bars i.lit.crit {
+  background: var(--red);
+}
+.meter-value {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 34px;
+}
