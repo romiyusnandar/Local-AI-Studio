@@ -1,0 +1,11 @@
+{
+  "name": "local-ai-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "start": "node server/index.js",
+    "dev:frontend": "npm --prefix frontend run dev"
+  }
+}

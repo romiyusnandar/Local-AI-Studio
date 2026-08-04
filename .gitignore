@@ -3,6 +3,10 @@
 /studio.exe
 /dist/
 
+# Node.js (frontend Vite + React, server)
+node_modules/
+frontend/dist/
+
 # Backend inference — diunduh terpisah, ratusan MB
 /app/backend/
 /app/tts-backend/
