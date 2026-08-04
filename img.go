@@ -34,7 +34,7 @@ var (
 // ---------- pemasangan backend ----------
 
 func ensureImgBackend() error {
-	return ensureBackendFor(imgBackendDir, "manifests/img_backends.json", "cpu")
+	return ensureBackendFor(imgBackendDir, "manifests/img_backends.json", detectAccel())
 }
 
 // ---------- model ----------
@@ -125,7 +125,9 @@ func runSD() (*exec.Cmd, error) {
 }
 
 // monitorImg me-restart mesin image gen kalau ia berhenti sendiri (crash).
-// Tidak ada fallback akselerasi seperti LLM — image gen v1 cuma CPU.
+// Tidak ada fallback otomatis ke CPU seperti LLM kalau varian GPU gagal
+// berulang kali — pengguna perlu hapus app/img-backend manual untuk memicu
+// pemasangan ulang varian lain.
 func monitorImg(cmd *exec.Cmd) {
 	failedAttempts := 0
 
@@ -423,10 +425,14 @@ func proxyImageRequest(w http.ResponseWriter, r *http.Request, path string, body
 	req.Header.Set("Content-Type", contentType)
 
 	// Generasi gambar di CPU bisa makan waktu lama untuk resolusi/step besar.
+	// Catatan: kalau client (browser) memutus koneksi duluan sebelum selesai,
+	// request ke sd-server ikut dibatalkan dan client.Do gagal di sini —
+	// tapi itu BUKAN berarti prosesnya mati, jadi jangan sentuh status
+	// mesin di sini. Status hidup/mati murni ditentukan oleh monitorImg()
+	// lewat cmd.Wait().
 	client := &http.Client{Timeout: 10 * time.Minute}
 	res, err := client.Do(req)
 	if err != nil {
-		setImgEngine(false)
 		writeJSON(w, http.StatusBadGateway,
 			map[string]any{"error": "mesin image gen tidak merespons"})
 		return

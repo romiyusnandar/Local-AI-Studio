@@ -419,11 +419,12 @@ func handleSTTTranscribe(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 	req.ContentLength = r.ContentLength
 
-	// Transkripsi bisa makan waktu untuk audio panjang.
+	// Transkripsi bisa makan waktu untuk audio panjang. Catatan: kalau
+	// client memutus koneksi duluan, itu bukan berarti prosesnya mati —
+	// status hidup/mati murni ditentukan monitorSTT() lewat cmd.Wait().
 	client := &http.Client{Timeout: 120 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		setSTTEngine(false)
 		writeJSON(w, http.StatusBadGateway,
 			map[string]any{"error": "mesin STT tidak merespons"})
 		return

@@ -276,9 +276,12 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// Catatan: kalau client memutus koneksi duluan, request ke llama-server
+	// ikut dibatalkan dan Do gagal di sini — itu bukan berarti prosesnya
+	// mati. Status hidup/mati murni ditentukan oleh monitor() lewat
+	// cmd.Wait(), jangan disentuh di sini.
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		setEngine(false)
 		writeJSON(w, http.StatusBadGateway,
 			map[string]any{"error": "mesin AI tidak merespons"})
 		return

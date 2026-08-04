@@ -3,9 +3,21 @@
   "backends": [
     {
       "os": "windows",
+      "accel": "vulkan",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-win-vulkan-x64.zip",
+      "entrypoint": "sd-server.exe"
+    },
+    {
+      "os": "windows",
       "accel": "cpu",
       "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-win-cpu-x64.zip",
       "entrypoint": "sd-server.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "vulkan",
+      "url": "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-809-eb7f35c/sd-master-eb7f35c-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+      "entrypoint": "sd-server"
     },
     {
       "os": "linux",

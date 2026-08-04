@@ -438,11 +438,12 @@ func handleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Sintesis butuh waktu, tapi tidak selama unduhan — batasi supaya
-	// permintaan yang macet tidak menggantung selamanya.
+	// permintaan yang macet tidak menggantung selamanya. Catatan: kalau
+	// client memutus koneksi duluan, itu bukan berarti prosesnya mati —
+	// status hidup/mati murni ditentukan monitorTTS() lewat cmd.Wait().
 	client := &http.Client{Timeout: 120 * time.Second}
 	res, err := client.Do(httpReq)
 	if err != nil {
-		setTTSEngine(false)
 		writeJSON(w, http.StatusBadGateway,
 			map[string]any{"error": "mesin TTS tidak merespons"})
 		return
