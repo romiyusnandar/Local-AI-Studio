@@ -59,4 +59,14 @@ export async function downloadWithResume(url, dest, signal) {
   if (total > 0 && written !== total) {
     throw new Error(`unduhan tidak lengkap (${written} dari ${total} byte)`);
   }
+  // Kalau server tidak mengirim Content-Length (mis. chunked), total di atas
+  // jadi 0 dan tidak ketangkap pengecekan di atas. Untuk unduhan baru (belum
+  // ada bytes tersimpan), tidak menerima satu byte pun jelas kegagalan
+  // jaringan, bukan unduhan sukses berukuran nol — tanpa ini file kosong
+  // lolos ke tahap validasi dan cuma dilaporkan sebagai "bukan model yang
+  // valid", padahal akar masalahnya koneksi terputus. Untuk resume (start >
+  // 0) tidak diperlakukan sama, karena file lama bisa saja sudah lengkap.
+  if (start === 0 && written === 0) {
+    throw new Error("tidak ada data diterima dari server — kemungkinan koneksi terputus, coba lagi");
+  }
 }
