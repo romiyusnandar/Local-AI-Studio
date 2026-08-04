@@ -22,10 +22,8 @@ function post(url, payload) {
   });
 }
 
-// kind: "llm" | "tts" | "stt" | "img" -> base path API. "img" ditambah
-// begitu fase-nya dikerjakan (tanpa perlu ubah kode di sini lagi, cukup
-// tambah entri).
-const BASE = { llm: "/api", stt: "/api/stt", tts: "/api/tts" };
+// kind: "llm" | "tts" | "stt" | "img" -> base path API.
+const BASE = { llm: "/api", stt: "/api/stt", tts: "/api/tts", img: "/api/img" };
 
 export const Api = {
   status: (kind = "llm") => j(`${BASE[kind]}/status`),
@@ -66,6 +64,28 @@ export const Api = {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error((body && body.error) || `mesin TTS gagal (${res.status})`);
+    }
+    return res.blob();
+  },
+
+  async imgGenerate(payload) {
+    const res = await fetch("/api/img/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error((body && body.error) || `mesin image gen gagal (${res.status})`);
+    }
+    return res.blob();
+  },
+
+  async imgEdit(formData) {
+    const res = await fetch("/api/img/edit", { method: "POST", body: formData });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error((body && body.error) || `mesin image gen gagal (${res.status})`);
     }
     return res.blob();
   },

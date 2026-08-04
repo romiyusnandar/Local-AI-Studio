@@ -7,6 +7,7 @@ import Busboy from "busboy";
 import * as llm from "./engines/llm.js";
 import * as stt from "./engines/stt.js";
 import * as tts from "./engines/tts.js";
+import * as img from "./engines/img.js";
 import { getProgress } from "./lib/progress.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
@@ -142,10 +143,43 @@ async function handleVoices(req, res) {
   sendJson(res, 200, { voices: tts.VOICES });
 }
 
+// ---------- handler Image (generate/edit: balasan gambar mentah, bukan pola model-manager biasa) ----------
+
+// handleImgGenerate/handleImgEdit mem-proxy ke sd-server dan decode
+// b64_json responsnya jadi bytes gambar mentah — konsisten dengan pola
+// handleSpeak (TTS) supaya klien tinggal pakai <img>/blob tanpa decode
+// manual.
+async function handleImgGenerate(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const payload = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+
+    const { buf, contentType } = await img.generate(payload);
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(buf);
+  } catch (err) {
+    sendJson(res, err.message === "mesin image gen sedang mati" ? 503 : 502, { error: err.message });
+  }
+}
+
+async function handleImgEdit(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const { buf, contentType } = await img.edit(Readable.toWeb(req), req.headers["content-type"]);
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(buf);
+  } catch (err) {
+    sendJson(res, err.message === "mesin image gen sedang mati" ? 503 : 502, { error: err.message });
+  }
+}
+
 // ---------- routing ----------
 
 const llmRoutes = makeEngineRoutes(llm);
 const sttRoutes = makeEngineRoutes(stt);
+const imgRoutes = makeEngineRoutes(img);
 
 const routes = {
   "/api/health": (req, res) => sendJson(res, 200, { ok: true, name: "Local AI Studio" }),
@@ -171,6 +205,16 @@ const routes = {
   "/api/tts/status": (req, res) => tts.status().then((s) => sendJson(res, 200, s)),
   "/api/tts/speak": handleSpeak,
   "/api/tts/voices": handleVoices,
+
+  "/api/img/status": imgRoutes.status,
+  "/api/img/generate": handleImgGenerate,
+  "/api/img/edit": handleImgEdit,
+  "/api/img/models": imgRoutes.models,
+  "/api/img/models/select": imgRoutes.select,
+  "/api/img/catalog": imgRoutes.catalog,
+  "/api/img/models/download": imgRoutes.download,
+  "/api/img/models/cancel": imgRoutes.cancel,
+  "/api/img/models/delete": imgRoutes.delete,
 
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
 };
@@ -220,6 +264,20 @@ async function main() {
   } else {
     console.log(`belum ada model STT — taruh file .bin di ${stt.modelDir}/`);
   }
+
+  try {
+    await img.ensureBackend();
+  } catch (err) {
+    console.log("gagal menyiapkan backend image gen:", err.message);
+    console.log("aplikasi tetap jalan — cek koneksi lalu restart");
+  }
+  const imgModels = await img.listModels();
+  if (imgModels.length > 0) {
+    img.setActiveModel(imgModels[0]);
+  } else {
+    console.log(`belum ada model image gen — taruh file .gguf/.safetensors di ${img.modelDir}/`);
+  }
+  img.startEngine();
 
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`buka http://localhost:${PORT}`);

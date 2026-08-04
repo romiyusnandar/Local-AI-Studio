@@ -9,6 +9,7 @@ import "./ModelManager.css";
 const KINDS = [
   { id: "llm", label: "Chat", ext: ".gguf" },
   { id: "stt", label: "Suara→Teks", ext: ".bin" },
+  { id: "img", label: "Gambar", ext: ".gguf/.safetensors" },
 ];
 
 function formatBytes(n) {
