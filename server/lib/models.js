@@ -5,6 +5,18 @@ import { downloadWithResume } from "./download.js";
 import { setProgress } from "./progress.js";
 import { beginDownload, endDownload } from "./download-state.js";
 
+// normalizeModelUrl mengubah URL halaman HuggingFace (/blob/) menjadi URL
+// unduhan langsung (/resolve/). Kalau pengguna menempel URL dari address bar
+// browser (yang berformat /blob/), server HF membalas halaman HTML, bukan
+// file model — hasilnya file tak valid. Konversi ini menyamai perilaku repo
+// referensi supaya URL kustom "apa adanya" tetap bisa dipakai.
+export function normalizeModelUrl(rawUrl) {
+  if (rawUrl.includes("huggingface.co") && rawUrl.includes("/blob/")) {
+    return rawUrl.replace("/blob/", "/resolve/");
+  }
+  return rawUrl;
+}
+
 // safeFilename mengambil nama file dari URL dan menolak apa pun yang bisa
 // keluar dari folder model.
 export function safeFilename(rawUrl, exts) {
@@ -55,10 +67,15 @@ export async function isSafetensors(filePath) {
   }
 }
 
-// isValidImageModel memilih validator sesuai ekstensi — image gen menerima
-// .gguf (magic GGUF) maupun .safetensors (header terstruktur).
-export function isValidImageModel(filePath) {
-  return filePath.toLowerCase().endsWith(".safetensors") ? isSafetensors(filePath) : isGGUF(filePath);
+// isValidImageModel: image gen menerima .gguf (magic GGUF) maupun
+// .safetensors (header terstruktur). Sengaja TIDAK memilih validator dari
+// ekstensi path, karena saat unduh berlangsung validasi dijalankan atas
+// file sementara berakhiran ".part" (mis. "model.safetensors.part") —
+// bukan ".safetensors" — sehingga dispatch-by-ekstensi salah cabang dan
+// menolak file yang sebenarnya valid. Cukup terima kalau file cocok salah
+// satu format; header error HTML/JSON tidak akan lolos keduanya.
+export async function isValidImageModel(filePath) {
+  return (await isGGUF(filePath)) || (await isSafetensors(filePath));
 }
 
 export async function listModelsIn(dir, exts) {
@@ -94,6 +111,9 @@ async function downloadAndValidate(rawUrl, targetDir, exts, validate, signal) {
 // sidecar "<model>.mmproj" berisi nama file projector — dibaca lagi saat
 // model dijalankan (lihat projectorFor di llm.js).
 export async function startModelDownload(rawUrl, targetDir, exts, validate, projectorUrl) {
+  rawUrl = normalizeModelUrl(rawUrl);
+  if (projectorUrl) projectorUrl = normalizeModelUrl(projectorUrl);
+
   const name = safeFilename(rawUrl, exts);
   const final = path.join(targetDir, name);
   if (fs.existsSync(final)) throw new Error(`model "${name}" sudah ada`);
