@@ -1,16 +1,29 @@
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Studio</title></head>
-<body>
+<body style="font-family: system-ui; max-width: 640px; padding: 24px">
   <h1>Local AI Studio</h1>
-  <button onclick="cek()">Cek server</button>
-  <p id="hasil">-</p>
+
+  <textarea id="input" rows="3" style="width:100%"></textarea>
+  <button onclick="kirim()">Kirim</button>
+  <pre id="hasil" style="white-space: pre-wrap"></pre>
 
   <script>
-    async function cek() {
-      const res = await fetch("/api/waktu");
+    async function kirim() {
+      const teks = document.getElementById("input").value;
+      const hasil = document.getElementById("hasil");
+      hasil.textContent = "berpikir...";
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: teks }]
+        })
+      });
+
       const data = await res.json();
-      document.getElementById("hasil").textContent = data.waktu;
+      hasil.textContent = data.choices[0].message.content;
     }
   </script>
 </body>

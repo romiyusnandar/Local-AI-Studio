@@ -1,12 +1,29 @@
+# Binary hasil build
+/studio
+/studio.exe
 /dist/
-/web/dist/*
-!/web/dist/index.html
-/web/node_modules/
+
+# Backend inference — diunduh terpisah, ratusan MB
+/app/backend/
+
+# Bobot model — bisa puluhan GB
 /app/models/
 /app/llm-models/
-/app/outputs/
-/app/backend/
 *.gguf
 *.safetensors
+*.ckpt
+*.bin
+
+# Hasil generate
+/app/outputs/
+
+# Config lokal pengguna
 config.json
-/tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
