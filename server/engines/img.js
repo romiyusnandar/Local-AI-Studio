@@ -60,11 +60,24 @@ function setLoad(patch) {
   loadState = { ...loadState, ...patch, progress: Math.max(loadState.progress || 0, patch.progress ?? 0) };
 }
 
+// Lihat catatan di llm.js: merayapkan progres selama loading agar tidak
+// tampak macet saat model diffusion besar dimuat.
+let loadTimer = null;
+function startLoadCreep() {
+  clearInterval(loadTimer);
+  loadTimer = setInterval(() => {
+    if (!loadState.active) return clearInterval(loadTimer);
+    if (loadState.progress < 90) loadState = { ...loadState, progress: loadState.progress + 1 };
+  }, 500);
+}
+
 function beginLoad() {
-  loadState = { active: true, phase: "Memulai mesin…", progress: 0, current: 0, total: 0, speed: "" };
+  loadState = { active: true, phase: "Memuat model…", progress: 2, current: 0, total: 0, speed: "" };
+  startLoadCreep();
 }
 
 function endLoad() {
+  clearInterval(loadTimer);
   loadState = { active: false, phase: "", progress: 100, current: 0, total: 0, speed: "" };
 }
 

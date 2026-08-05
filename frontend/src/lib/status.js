@@ -7,13 +7,10 @@ export function engineStatusText(status, label) {
   if (status.mesinHidup) return `siap — ${status.model || "model aktif"}`;
 
   const load = status.load;
-  if (load?.active) {
-    const parts = [load.phase || "memuat…"];
-    if (load.progress > 0) parts.push(`${load.progress}%`);
-    if (load.speed) parts.push(load.speed);
-    return parts.join(" · ");
-  }
+  // Detail progres pemuatan (bar + persen) ditampilkan di Model Manager;
+  // di panel fitur cukup teks ringkas.
+  if (load?.active) return "memuat model…";
   if (load?.phase?.startsWith("gagal")) return load.phase;
 
-  return status.model ? `mesin ${label} menyala…` : `mesin ${label} mati — pilih model`;
+  return status.model ? `mesin ${label} menyala…` : `mesin ${label} mati — pilih model di Model Manager`;
 }

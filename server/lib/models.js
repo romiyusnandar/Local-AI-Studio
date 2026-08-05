@@ -83,6 +83,9 @@ export async function listModelsIn(dir, exts) {
     const entries = await fsp.readdir(dir, { withFileTypes: true });
     return entries
       .filter((e) => e.isFile() && exts.some((ext) => e.name.toLowerCase().endsWith(ext)))
+      // Proyektor visi (mmproj-*.gguf) ikut companion model multimodal, bukan
+      // model yang bisa dipilih sendiri — jangan tampilkan di daftar model.
+      .filter((e) => !/mmproj/i.test(e.name))
       .map((e) => e.name);
   } catch {
     return [];

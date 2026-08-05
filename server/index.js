@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
+import { execFileSync } from "node:child_process";
 import Busboy from "busboy";
 import * as llm from "./engines/llm.js";
 import * as stt from "./engines/stt.js";
@@ -400,57 +401,69 @@ const server = http.createServer((req, res) => {
   return serveStatic(req, res);
 });
 
+// killOrphans membunuh proses inference yatim (llama-server/sd-server) dari
+// sesi sebelumnya yang tidak sempat dimatikan (mis. server ditutup paksa,
+// crash, atau node dibunuh tanpa membunuh anaknya). Karena aplikasi TIDAK
+// auto-load model, saat startup seharusnya tidak ada proses ini yang sah —
+// jadi aman membersihkan semuanya agar RAM tidak terpakai proses hantu.
+function killOrphans() {
+  const names = process.platform === "win32" ? ["llama-server.exe", "sd-server.exe"] : ["llama-server", "sd-server"];
+  for (const n of names) {
+    try {
+      if (process.platform === "win32") execFileSync("taskkill", ["/F", "/IM", n, "/T"], { stdio: "ignore" });
+      else execFileSync("pkill", ["-9", "-f", n], { stdio: "ignore" });
+    } catch {
+      // tidak ada proso yang cocok — normal
+    }
+  }
+}
+
+// cleanupChildren mematikan proses backend anak saat server ini berhenti,
+// supaya tidak jadi yatim. Dipanggil pada SIGINT/SIGTERM (mis. Ctrl+C).
+function cleanupChildren() {
+  for (const proc of [llm.getProcess(), img.getProcess()]) {
+    if (!proc || proc.killed || !proc.pid) continue;
+    try {
+      if (process.platform === "win32") execFileSync("taskkill", ["/PID", String(proc.pid), "/T", "/F"], { stdio: "ignore" });
+      else proc.kill("SIGKILL");
+    } catch {
+      // sudah mati / gagal — abaikan
+    }
+  }
+}
+
+let shuttingDown = false;
+function gracefulExit() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  cleanupChildren();
+  process.exit(0);
+}
+process.on("SIGINT", gracefulExit);
+process.on("SIGTERM", gracefulExit);
+
 async function main() {
-  try {
-    await llm.ensureBackend();
-  } catch (err) {
-    console.log("gagal menyiapkan backend:", err.message);
-    console.log("aplikasi tetap jalan — cek koneksi lalu restart");
-  }
-  const llmModels = await llm.listModels();
-  if (llmModels.length > 0) {
-    llm.setActiveModel(llmModels[0]);
-  } else {
-    console.log(`belum ada model — taruh file .gguf di ${llm.modelDir}/`);
-  }
-  llm.startEngine();
+  // Bersihkan proses inference yatim dari sesi sebelumnya sebelum mulai.
+  killOrphans();
 
-  try {
-    await stt.ensureBackend();
-  } catch (err) {
-    console.log("gagal menyiapkan backend STT:", err.message);
-    console.log("aplikasi tetap jalan — cek koneksi lalu restart");
-  }
-  const sttModels = await stt.listModels();
-  if (sttModels.length > 0) {
-    stt.setActiveModel(sttModels[0]);
-  } else {
-    console.log(`belum ada model STT — taruh file .bin di ${stt.modelDir}/`);
-  }
-
-  // TTS: pasang model Kokoro rekomendasi (Q8) kalau belum ada, lalu set aktif.
-  // Bobotnya di-cache kokoro-js saat generate pertama.
-  await tts.ensureDefaultModel();
-
-  try {
-    await img.ensureBackend();
-  } catch (err) {
-    console.log("gagal menyiapkan backend image gen:", err.message);
-    console.log("aplikasi tetap jalan — cek koneksi lalu restart");
-  }
-  const imgModels = await img.listModels();
-  if (imgModels.length > 0) {
-    img.setActiveModel(imgModels[0]);
-  } else {
-    console.log(`belum ada model image gen — taruh file .gguf/.safetensors di ${img.modelDir}/`);
-  }
-  img.startEngine();
+  // Catatan: backend (binari llama/whisper/sd) tetap disiapkan saat start,
+  // tapi TIDAK ada model yang dimuat otomatis. Pengguna memilih model yang
+  // ingin dipakai di Model Manager, dan hanya saat itulah mesinnya menyala —
+  // supaya tidak ada model yang ter-load tanpa diminta (mencegah error &
+  // pemakaian RAM/VRAM yang tidak perlu). Disiapkan berurutan agar progress
+  // unduhan backend (state global bersama) tidak saling menimpa.
+  await llm.ensureBackend().catch((err) => console.log("gagal menyiapkan backend chat:", err.message));
+  await stt.ensureBackend().catch((err) => console.log("gagal menyiapkan backend STT:", err.message));
+  await img.ensureBackend().catch((err) => console.log("gagal menyiapkan backend image gen:", err.message));
+  console.log("backend siap — pilih model di Model Manager untuk mulai memakai tiap mesin");
 
   server.listen(PORT, HOST, () => {
-    console.log(`buka http://localhost:${PORT}`);
+    console.log("=====================================");
+    console.log(`  buka http://localhost:${PORT}  `);
     if (HOST === "0.0.0.0") {
       for (const addr of lanAddresses()) {
         console.log(`  dari device lain di jaringan yang sama: http://${addr}:${PORT}`);
+        console.log("=====================================");
       }
       console.log("  (akses jaringan aktif — pastikan hanya di jaringan tepercaya)");
     }

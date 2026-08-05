@@ -33,12 +33,29 @@ export default function ModelManager() {
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(null);
   const [customUrl, setCustomUrl] = useState("");
+  const [engineStatus, setEngineStatus] = useState({ mesinHidup: false, load: null });
   const pollRef = useRef(null);
+  const statusRef = useRef(null);
 
   useEffect(() => {
     load();
-    return () => clearInterval(pollRef.current);
+    // Pantau status mesin untuk menampilkan progres pemuatan model (bar +
+    // fase) di sini — bukan di panel fitur.
+    refreshEngineStatus();
+    statusRef.current = setInterval(refreshEngineStatus, 1000);
+    return () => {
+      clearInterval(pollRef.current);
+      clearInterval(statusRef.current);
+    };
   }, [kind]);
+
+  async function refreshEngineStatus() {
+    try {
+      setEngineStatus(await Api.status(kind));
+    } catch {
+      // diamkan
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -135,6 +152,21 @@ export default function ModelManager() {
         {loading && <div className="empty">Memuat…</div>}
         {error && <div className="empty">{error}</div>}
 
+        {engineStatus.load?.active && (
+          <div className="engine-load">
+            <div className="engine-load-head">
+              <span className="engine-load-phase">{engineStatus.load.phase || "Memuat model…"}</span>
+              <span className="engine-load-pct">
+                {engineStatus.load.progress ? `${engineStatus.load.progress}%` : ""}
+                {engineStatus.load.speed ? ` · ${engineStatus.load.speed}` : ""}
+              </span>
+            </div>
+            <div className="engine-load-bar">
+              <i style={{ width: `${engineStatus.load.progress || 0}%` }} />
+            </div>
+          </div>
+        )}
+
         {!loading && !error && (
           <>
             <div className="section-title">Terpasang</div>
@@ -161,7 +193,10 @@ export default function ModelManager() {
             {catalog.map((item) => (
               <div key={item.file} className="model-row">
                 <div className="model-row-main">
-                  <div className="model-row-name">{item.name}</div>
+                  <div className="model-row-name">
+                    {item.name}
+                    {item.multimodal && <span className="badge-vision">Vision</span>}
+                  </div>
                   {item.note && <div className="model-row-note">{item.note}</div>}
                 </div>
                 <div className="model-row-size">

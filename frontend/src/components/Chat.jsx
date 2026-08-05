@@ -99,6 +99,11 @@ export default function Chat({ onOpenModels }) {
     if (tb && thinkPinnedRef.current) tb.scrollTop = tb.scrollHeight;
   }, [messages]);
 
+  // Model non-vision → buang lampiran gambar yang mungkin masih tersisa.
+  useEffect(() => {
+    if (!status.multimodal && attachedImage) setAttachedImage(null);
+  }, [status.multimodal]);
+
   async function refreshStatus() {
     try {
       setStatus(await Api.status());
@@ -316,11 +321,6 @@ export default function Chat({ onOpenModels }) {
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
             <span>{engineStatusText(status, "chat")}</span>
           </div>
-          {!status.mesinHidup && status.load?.active && status.load.progress > 0 && (
-            <div className="load-bar">
-              <i style={{ width: `${status.load.progress}%` }} />
-            </div>
-          )}
         </div>
         <div className="chat-header-right">
           {sessionTokens > 0 && <span className="token-total" title="Total token sesi ini">Σ {sessionTokens.toLocaleString()} token</span>}
@@ -422,7 +422,17 @@ export default function Chat({ onOpenModels }) {
           </div>
         )}
         <div className="composer-row">
-          <button type="button" className="icon-btn" onClick={() => fileInputRef.current.click()} title="Lampirkan gambar">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => fileInputRef.current.click()}
+            disabled={!status.multimodal}
+            title={
+              status.multimodal
+                ? "Lampirkan gambar"
+                : "Model aktif tidak mendukung gambar — pasang & pilih model vision di Model Manager"
+            }
+          >
             <Paperclip size={16} />
           </button>
           <button

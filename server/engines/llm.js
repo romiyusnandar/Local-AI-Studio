@@ -46,11 +46,27 @@ function setLoad(patch) {
   loadState = { ...loadState, ...patch, progress: Math.max(loadState.progress || 0, patch.progress ?? 0) };
 }
 
+// Pemuatan bobot model (mmap/baca file GB) tidak selalu memancarkan progres
+// yang bisa di-parse, jadi tanpa ini angka bisa membeku di 8% untuk model
+// besar dan tampak "stuck". Timer ini merayapkan progres perlahan menuju 90%
+// selama loading supaya jelas prosesnya masih jalan. Marker dari log tetap
+// bisa melompatkannya lebih cepat.
+let loadTimer = null;
+function startLoadCreep() {
+  clearInterval(loadTimer);
+  loadTimer = setInterval(() => {
+    if (!loadState.active) return clearInterval(loadTimer);
+    if (loadState.progress < 90) loadState = { ...loadState, progress: loadState.progress + 1 };
+  }, 500);
+}
+
 function beginLoad() {
-  loadState = { active: true, phase: "Memulai mesin…", progress: 0, current: 0, total: 0, speed: "" };
+  loadState = { active: true, phase: "Memuat model…", progress: 2, current: 0, total: 0, speed: "" };
+  startLoadCreep();
 }
 
 function endLoad() {
+  clearInterval(loadTimer);
   loadState = { active: false, phase: "", progress: 100, current: 0, total: 0, speed: "" };
 }
 
@@ -94,7 +110,14 @@ export function getPort() {
 export { isDownloadActive };
 
 export async function status() {
-  return { mesinHidup: running, model: activeModel, load: loadState };
+  // multimodal = model aktif punya proyektor visi (mmproj). Ini sinyal paling
+  // andal apakah input gambar didukung — bukan sekadar flag katalog, tapi
+  // apakah proyektornya benar-benar ada & dimuat.
+  let multimodal = false;
+  if (activeModel) {
+    multimodal = Boolean(await projectorFor(path.join(modelDir, activeModel)));
+  }
+  return { mesinHidup: running, model: activeModel, load: loadState, multimodal };
 }
 
 export async function selectModel(model) {

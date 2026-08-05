@@ -144,11 +144,6 @@ export default function ImageGen({ onOpenModels }) {
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
             <span>{engineStatusText(status, "image gen")}</span>
           </div>
-          {!status.mesinHidup && status.load?.active && status.load.progress > 0 && (
-            <div className="load-bar">
-              <i style={{ width: `${status.load.progress}%` }} />
-            </div>
-          )}
         </div>
         <ModelChip model={status.model} onOpen={onOpenModels} />
       </div>

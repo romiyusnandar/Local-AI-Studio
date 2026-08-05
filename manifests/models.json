@@ -5,6 +5,7 @@
       "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
       "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
       "sizeBytes": 398000000,
+      "multimodal": false,
       "note": "Ringan, cepat di CPU. Cocok untuk mencoba."
     },
     {
@@ -12,6 +13,7 @@
       "file": "qwen2.5-3b-instruct-q4_k_m.gguf",
       "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
       "sizeBytes": 2100000000,
+      "multimodal": false,
       "note": "Kualitas jawaban jauh lebih baik. Butuh RAM 4GB+."
     },
     {
@@ -19,6 +21,7 @@
       "file": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
       "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
       "sizeBytes": 491400064,
+      "multimodal": false,
       "note": "Asisten coding ringan dan cepat, cocok untuk mesin RAM/VRAM kecil."
     },
     {
@@ -26,6 +29,7 @@
       "file": "smollm2-1.7b-instruct-q4_k_m.gguf",
       "url": "https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF/resolve/main/smollm2-1.7b-instruct-q4_k_m.gguf",
       "sizeBytes": 1055609536,
+      "multimodal": false,
       "note": "Ringan dengan reasoning yang cukup kuat untuk ukurannya."
     },
     {
@@ -33,6 +37,7 @@
       "file": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
       "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
       "sizeBytes": 4683073536,
+      "multimodal": false,
       "note": "Asisten coding & teks yang jauh lebih pintar. Untuk mesin RAM/VRAM menengah-tinggi."
     },
     {
@@ -40,17 +45,30 @@
       "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
       "url": "https://huggingface.co/lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
       "sizeBytes": 4920739168,
+      "multimodal": false,
       "note": "Model serba guna kualitas tinggi. Untuk mesin dengan RAM/VRAM besar."
+    },
+    {
+      "name": "Qwen2-VL 2B Instruct (vision)",
+      "file": "Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
+      "url": "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
+      "sizeBytes": 986000000,
+      "multimodal": true,
+      "projectorFile": "mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
+      "projectorUrl": "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
+      "projectorSizeBytes": 710000000,
+      "note": "Multimodal ringan & modern — bisa memahami gambar. Kualitas visi lebih baik dari LLaVA 1.5. Proyektor otomatis ikut terunduh."
     },
     {
       "name": "LLaVA 1.5 7B (vision)",
       "file": "ggml-model-q4_k.gguf",
       "url": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/ggml-model-q4_k.gguf",
       "sizeBytes": 4081004224,
+      "multimodal": true,
       "projectorFile": "mmproj-model-f16.gguf",
       "projectorUrl": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/mmproj-model-f16.gguf",
       "projectorSizeBytes": 624434336,
-      "note": "Model multimodal — bisa memahami gambar yang dikirim lewat chat. Proyektor visi otomatis ikut terunduh."
+      "note": "Model multimodal lawas — bisa memahami gambar. Besar (7B). Proyektor visi otomatis ikut terunduh."
     }
   ]
 }
