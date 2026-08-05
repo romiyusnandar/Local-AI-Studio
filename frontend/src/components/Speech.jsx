@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Upload, Copy } from "lucide-react";
 import { Api } from "../services/api.js";
 import { MicRecorder } from "../lib/wav.js";
+import ModelChip from "./ModelChip.jsx";
 import "./Speech.css";
 
-export default function Speech() {
+export default function Speech({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
-  const [models, setModels] = useState([]);
-  const [activeModel, setActiveModel] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [level, setLevel] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -17,7 +16,6 @@ export default function Speech() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    refreshModels();
     refreshStatus();
     const t = setInterval(refreshStatus, 3000);
     return () => clearInterval(t);
@@ -28,26 +26,6 @@ export default function Speech() {
       setStatus(await Api.status("stt"));
     } catch {
       // diamkan
-    }
-  }
-
-  async function refreshModels() {
-    try {
-      const data = await Api.models("stt");
-      setModels(data.models || []);
-      setActiveModel(data.active || "");
-    } catch {
-      // diamkan
-    }
-  }
-
-  async function onSelectModel(e) {
-    const model = e.target.value;
-    setActiveModel(model);
-    try {
-      await Api.selectModel("stt", model);
-    } catch (err) {
-      alert(err.message);
     }
   }
 
@@ -99,24 +77,17 @@ export default function Speech() {
 
   return (
     <div className="speech-panel">
-      <div className="speech-header">
+      <div className="panel-head">
         <div>
           <h1>Suara ke Teks</h1>
           <div className="status-line">
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
             <span>
-              {status.mesinHidup ? `siap — ${status.model}` : "mesin STT mati — pilih model"}
+              {status.mesinHidup ? `siap — ${status.model}` : "mesin STT mati — pasang model di Model Manager"}
             </span>
           </div>
         </div>
-        <select value={activeModel} onChange={onSelectModel} disabled={models.length === 0}>
-          {models.length === 0 && <option>Belum ada model</option>}
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+        <ModelChip model={status.model} onOpen={onOpenModels} />
       </div>
 
       <div className="speech-body">

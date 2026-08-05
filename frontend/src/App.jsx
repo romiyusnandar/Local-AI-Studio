@@ -17,10 +17,10 @@ function App() {
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <Sidebar active={panel} onSelect={setPanel} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {panel === "chat" && <Chat />}
-          {panel === "image" && <ImageGen />}
-          {panel === "speech" && <Speech />}
-          {panel === "tts" && <TextToSpeech />}
+          {panel === "chat" && <Chat onOpenModels={() => setPanel("models")} />}
+          {panel === "image" && <ImageGen onOpenModels={() => setPanel("models")} />}
+          {panel === "speech" && <Speech onOpenModels={() => setPanel("models")} />}
+          {panel === "tts" && <TextToSpeech onOpenModels={() => setPanel("models")} />}
           {panel === "models" && <ModelManager />}
           {panel === "system" && <System />}
         </div>

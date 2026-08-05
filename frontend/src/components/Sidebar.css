@@ -23,7 +23,7 @@
   cursor: pointer;
 }
 .nav-item span {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;

@@ -13,7 +13,7 @@
   margin: 0 0 4px;
 }
 .model-header .sub {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -53,7 +53,7 @@
 }
 
 .section-title {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -83,7 +83,7 @@
   font-size: 13px;
 }
 .model-row-file {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -93,14 +93,14 @@
   margin-top: 2px;
 }
 .model-row-size {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   flex: none;
 }
 
 .badge {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -132,7 +132,7 @@
   transition: width 0.2s ease;
 }
 .download-status {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   margin-top: 5px;
@@ -146,7 +146,7 @@
   margin-top: 18px;
 }
 .custom-url label {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

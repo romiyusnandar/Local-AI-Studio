@@ -17,7 +17,7 @@
   margin: 0 0 4px;
 }
 .system-header .sub {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -34,6 +34,72 @@
   padding: 24px 0;
 }
 
+/* ===== Info perangkat ===== */
+.sysinfo {
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 7px);
+  background: var(--bg-panel);
+  padding: 4px 16px;
+  margin-bottom: 26px;
+}
+.sysinfo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sysinfo-row:last-child {
+  border-bottom: none;
+}
+.sysinfo-row svg {
+  color: var(--text-dim);
+  flex: none;
+}
+.sysinfo-row .k {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  width: 150px;
+  flex: none;
+}
+.sysinfo-row .v {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accel-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+}
+.accel-badge.accel-cuda {
+  color: #76b900;
+  border-color: rgba(118, 185, 0, 0.4);
+  background: rgba(118, 185, 0, 0.1);
+}
+.accel-badge.accel-vulkan {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+  background: var(--amber-soft);
+}
+.accel-badge.accel-metal {
+  color: var(--teal);
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+.accel-badge.accel-cpu {
+  color: var(--text-dim);
+}
+
 .grid-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -47,7 +113,7 @@
   padding: 16px;
 }
 .card-label {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -58,7 +124,7 @@
   margin-bottom: 10px;
 }
 .card-value {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 26px;
   font-weight: 600;
 }
@@ -86,14 +152,14 @@
   background: var(--red);
 }
 .card-sub {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   margin-top: 6px;
 }
 
 .model-section-title {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -132,7 +198,7 @@
   color: var(--text-dim);
 }
 .engine-model {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   overflow: hidden;

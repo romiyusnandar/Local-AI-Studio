@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Paperclip, Send, X, Square, Globe } from "lucide-react";
 import { Api } from "../services/api.js";
 import { engineStatusText } from "../lib/status.js";
+import ModelChip from "./ModelChip.jsx";
 import "./Chat.css";
 
 function fileToDataUrl(file) {
@@ -13,10 +14,8 @@ function fileToDataUrl(file) {
   });
 }
 
-export default function Chat() {
+export default function Chat({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
-  const [models, setModels] = useState([]);
-  const [activeModel, setActiveModel] = useState("");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [attachedImage, setAttachedImage] = useState(null);
@@ -29,7 +28,6 @@ export default function Chat() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    refreshModels();
     refreshStatus();
     // 1.2s: cukup responsif untuk menampilkan progres pemuatan model.
     const t = setInterval(refreshStatus, 1200);
@@ -45,26 +43,6 @@ export default function Chat() {
       setStatus(await Api.status());
     } catch {
       // aplikasi baru buka / offline sesaat
-    }
-  }
-
-  async function refreshModels() {
-    try {
-      const data = await Api.models();
-      setModels(data.models || []);
-      setActiveModel(data.active || "");
-    } catch {
-      // diamkan
-    }
-  }
-
-  async function onSelectModel(e) {
-    const model = e.target.value;
-    setActiveModel(model);
-    try {
-      await Api.selectModel("llm", model);
-    } catch (err) {
-      alert(err.message);
     }
   }
 
@@ -220,7 +198,7 @@ export default function Chat() {
 
   return (
     <div className="chat-panel">
-      <div className="chat-header">
+      <div className="panel-head">
         <div>
           <h1>Chat</h1>
           <div className="status-line">
@@ -235,14 +213,7 @@ export default function Chat() {
         </div>
         <div className="chat-header-right">
           {sessionTokens > 0 && <span className="token-total" title="Total token sesi ini">Σ {sessionTokens.toLocaleString()} token</span>}
-          <select value={activeModel} onChange={onSelectModel} disabled={models.length === 0}>
-            {models.length === 0 && <option>Belum ada model</option>}
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <ModelChip model={status.model} onOpen={onOpenModels} />
         </div>
       </div>
 

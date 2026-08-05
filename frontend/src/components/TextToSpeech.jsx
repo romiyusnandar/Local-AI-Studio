@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Volume2, Download } from "lucide-react";
 import { Api } from "../services/api.js";
+import ModelChip from "./ModelChip.jsx";
 import "./TextToSpeech.css";
 
-export default function TextToSpeech() {
+export default function TextToSpeech({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
   const [voices, setVoices] = useState([]);
   const [voice, setVoice] = useState("af_heart");
@@ -68,25 +69,28 @@ export default function TextToSpeech() {
 
   return (
     <div className="tts-panel">
-      <div className="tts-header">
+      <div className="panel-head">
         <div>
           <h1>Teks ke Suara</h1>
           <div className="status-line">
             <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
-            <span>{status.mesinHidup ? `siap — ${status.model}` : "memeriksa mesin…"}</span>
+            <span>{status.mesinHidup ? `siap — ${status.model}` : "pasang model di Model Manager"}</span>
           </div>
         </div>
-        {voices.length > 0 ? (
-          <select value={voice} onChange={(e) => setVoice(e.target.value)}>
-            {voices.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="voice-single">Suara tunggal (mengikuti model)</span>
-        )}
+        <div className="tts-header-right">
+          {voices.length > 0 ? (
+            <select value={voice} onChange={(e) => setVoice(e.target.value)}>
+              {voices.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="voice-single">Suara tunggal</span>
+          )}
+          <ModelChip model={status.model} onOpen={onOpenModels} />
+        </div>
       </div>
 
       <div className="tts-body">

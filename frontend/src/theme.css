@@ -1,17 +1,26 @@
 :root {
-  --bg: #15171a;
-  --bg-panel: #1c1f23;
-  --bg-inset: #101214;
-  --bg-hover: #23262b;
-  --border: #2a2e33;
-  --border-strong: #383d44;
-  --text: #e8e6e1;
+  /* Palette — identitas "instrument panel": amber + teal di atas near-black */
+  --bg: #131519;
+  --bg-panel: #191c21;
+  --bg-inset: #0d0f12;
+  --bg-hover: #232830;
+  --border: #262a30;
+  --border-strong: #373d45;
+  --text: #ebe9e4;
   --text-dim: #8b9096;
-  --text-faint: #5a5f66;
-  --amber: #e8a33d;
+  --text-faint: #5a6068;
+  --amber: #eaa63f;
   --amber-dim: #7a5a26;
+  --amber-soft: rgba(234, 166, 63, 0.12);
   --teal: #4fb8a8;
+  --teal-soft: rgba(79, 184, 168, 0.13);
   --red: #e2574c;
+
+  --font-sans: "Inter Variable", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --radius: 7px;
+  --radius-sm: 4px;
 }
 
 html,
@@ -24,7 +33,33 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
 }
 
 /* ---- Primitif yang dipakai ulang lintas panel ---- */
@@ -33,7 +68,7 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-dim);
 }
@@ -42,39 +77,50 @@ body {
   height: 7px;
   border-radius: 50%;
   background: var(--text-faint);
+  flex: none;
 }
 .status-line .dot.ready {
   background: var(--teal);
-  box-shadow: 0 0 5px var(--teal);
+  box-shadow: 0 0 6px var(--teal);
 }
 
 .btn-sm {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   background: var(--bg-hover);
   border: 1px solid var(--border-strong);
   color: var(--text);
-  padding: 5px 10px;
-  border-radius: 3px;
+  padding: 6px 11px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 12px;
+  font-weight: 500;
   flex: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.btn-sm:hover {
+  border-color: var(--text-faint);
+  background: var(--border);
 }
 .btn-danger {
-  color: #e2574c;
+  color: var(--red);
   border-color: #5c2620;
   background: transparent;
 }
+.btn-danger:hover {
+  border-color: var(--red);
+  background: rgba(226, 87, 76, 0.1);
+}
 
 .label {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-faint);
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
 .btn-primary {
@@ -84,26 +130,86 @@ body {
   background: var(--amber);
   border: 1px solid var(--amber);
   color: #1a1200;
-  padding: 9px 16px;
-  border-radius: 3px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
+  transition: filter 0.15s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ---- Header panel yang konsisten di semua layar ---- */
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.panel-head h1 {
+  font-size: 17px;
+  margin: 0 0 5px;
+}
+
+/* ---- Chip model aktif: read-only, mengarah ke Model Manager ----
+   Pengelolaan model dipusatkan di Model Manager; panel lain hanya menampilkan
+   model aktif dan menautkan ke sana, bukan menggantinya di tempat. */
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.model-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.model-chip .model-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.model-chip .model-chip-name.empty {
+  color: var(--amber);
+}
+.model-chip svg {
+  flex: none;
+  opacity: 0.7;
+}
+.model-chip .chev {
+  margin-left: auto;
+  opacity: 0.5;
 }
 
 /* Bar progres pemuatan model (dipakai di header panel Chat & Gambar). */
 .load-bar {
   height: 3px;
-  width: 220px;
+  width: 240px;
   max-width: 100%;
   background: var(--bg-inset);
   border-radius: 2px;
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .load-bar i {
   display: block;

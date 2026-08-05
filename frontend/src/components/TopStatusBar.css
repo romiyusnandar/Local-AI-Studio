@@ -10,7 +10,7 @@
 }
 
 .wordmark {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   font-size: 12px;
   letter-spacing: 0.14em;
@@ -47,7 +47,7 @@
   padding: 4px 2px;
 }
 .meter-label {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   color: var(--text-faint);
@@ -77,7 +77,7 @@
   background: var(--red);
 }
 .meter-value {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-dim);
   min-width: 34px;

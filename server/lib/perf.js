@@ -1,9 +1,10 @@
 import os from "node:os";
 import { execFile } from "node:child_process";
+import { detectAccel } from "./backend-manager.js";
 
 function execFileP(cmd, args) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 3000 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+    execFile(cmd, args, { timeout: 4000 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
   });
 }
 
@@ -53,13 +54,84 @@ async function gpuStats() {
   }
 }
 
+// ---------- info sistem statis (OS, CPU, GPU, akselerasi) ----------
+
+function prettyOS() {
+  // os.version() memberi string ramah (mis. "Windows 11 Home") di Windows/macOS
+  // versi baru; kalau tidak, rangkai dari platform + release.
+  const names = { win32: "Windows", darwin: "macOS", linux: "Linux" };
+  let base = "";
+  try {
+    base = os.version();
+  } catch {
+    base = "";
+  }
+  const label = base && base.length < 60 ? base : `${names[process.platform] || process.platform} ${os.release()}`;
+  return `${label} · ${os.arch()}`;
+}
+
+// gpuName mendeteksi nama GPU lintas vendor (bukan hanya NVIDIA): nvidia-smi
+// dulu, lalu query khusus OS. Kembalikan "" kalau tak terdeteksi.
+async function gpuName() {
+  try {
+    const out = await execFileP("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"]);
+    const n = out.trim().split("\n")[0].trim();
+    if (n) return n;
+  } catch {
+    // bukan NVIDIA
+  }
+  try {
+    if (process.platform === "win32") {
+      const out = await execFileP("powershell", [
+        "-NoProfile",
+        "-Command",
+        "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join ', '",
+      ]);
+      return out.trim();
+    }
+    if (process.platform === "linux") {
+      const out = await execFileP("sh", ["-c", "lspci | grep -iE 'vga|3d|display' | sed 's/.*: //' | head -1"]);
+      return out.trim();
+    }
+    if (process.platform === "darwin") {
+      const out = await execFileP("sh", ["-c", "system_profiler SPDisplaysDataType | grep 'Chipset Model' | head -1 | sed 's/.*: //'"]);
+      return out.trim();
+    }
+  } catch {
+    // gagal query — biarkan kosong
+  }
+  return "";
+}
+
+const ACCEL_LABELS = { cuda: "NVIDIA CUDA", vulkan: "Vulkan", metal: "Apple Metal", cpu: "CPU" };
+
+let cachedSystem = null;
+
+// getSystemInfo: info statis perangkat. Di-cache karena tidak berubah selama
+// aplikasi hidup dan query GPU/akselerasi memanggil proses eksternal.
+export async function getSystemInfo() {
+  if (cachedSystem) return cachedSystem;
+  const cpu0 = os.cpus()[0];
+  const [accel, gpu] = await Promise.all([detectAccel().catch(() => "cpu"), gpuName()]);
+  cachedSystem = {
+    os: prettyOS(),
+    cpu: cpu0 ? cpu0.model.trim() : "?",
+    cpuCores: os.cpus().length,
+    gpu,
+    accel,
+    accelLabel: ACCEL_LABELS[accel] || accel,
+  };
+  return cachedSystem;
+}
+
 export async function getStats() {
-  const [cpu, gpu] = await Promise.all([cpuPercent(), gpuStats()]);
+  const [cpu, gpu, system] = await Promise.all([cpuPercent(), gpuStats(), getSystemInfo()]);
   return {
     cpuPercent: cpu,
     cpuCores: os.cpus().length,
     ramUsedBytes: os.totalmem() - os.freemem(),
     ramTotalBytes: os.totalmem(),
     gpu,
+    system,
   };
 }

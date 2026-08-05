@@ -30,7 +30,7 @@
   min-width: 220px;
 }
 .token-total {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--teal);
   white-space: nowrap;
@@ -64,7 +64,7 @@
   align-items: flex-end;
 }
 .msg-role {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -90,7 +90,7 @@
   border: 1px solid var(--border);
 }
 .msg-stats {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-faint);
 }
@@ -163,7 +163,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   list-style: none;
 }
 .msg-sources summary::-webkit-details-marker {
@@ -186,7 +186,7 @@
   text-decoration: underline;
 }
 .msg-web-error {
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
   display: flex;

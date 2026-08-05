@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cpu, MemoryStick, Gauge, RefreshCw, MessageSquare, Image, Mic, Volume2 } from "lucide-react";
+import { Cpu, MemoryStick, Gauge, RefreshCw, MessageSquare, Image, Mic, Volume2, Monitor, Zap } from "lucide-react";
 import { Api } from "../services/api.js";
 import "./System.css";
 
@@ -65,6 +65,38 @@ export default function System() {
       </div>
 
       <div className="system-body">
+        {perf?.system && (
+          <>
+            <div className="model-section-title">Perangkat</div>
+            <div className="sysinfo">
+              <div className="sysinfo-row">
+                <Monitor size={14} />
+                <span className="k">Sistem Operasi</span>
+                <span className="v">{perf.system.os}</span>
+              </div>
+              <div className="sysinfo-row">
+                <Cpu size={14} />
+                <span className="k">CPU</span>
+                <span className="v">
+                  {perf.system.cpu} · {perf.system.cpuCores} core
+                </span>
+              </div>
+              <div className="sysinfo-row">
+                <Gauge size={14} />
+                <span className="k">GPU</span>
+                <span className="v">{perf.system.gpu || "tidak terdeteksi"}</span>
+              </div>
+              <div className="sysinfo-row">
+                <Zap size={14} />
+                <span className="k">Backend akselerasi</span>
+                <span className="v">
+                  <span className={`accel-badge accel-${perf.system.accel}`}>{perf.system.accelLabel}</span>
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+
         {!perf ? (
           <div className="system-loading">Memuat data sistem&hellip;</div>
         ) : (
@@ -124,7 +156,11 @@ export default function System() {
                   <Gauge size={13} />
                   <span>GPU</span>
                 </div>
-                <div className="card-sub">Tidak ada GPU NVIDIA terdeteksi. Mesin berjalan di CPU.</div>
+                <div className="card-sub">
+                  {perf.system?.gpu || "GPU tidak terdeteksi"}
+                  <br />
+                  Pemakaian & VRAM waktu-nyata hanya tersedia untuk GPU NVIDIA.
+                </div>
               </div>
             )}
           </div>
@@ -143,6 +179,7 @@ export default function System() {
                     <span>{label}</span>
                   </div>
                   <span className="status-line">
+                    {s?.accel && <span className={`accel-badge accel-${s.accel}`}>{s.accel}</span>}
                     <span className={`dot${ready ? " ready" : ""}`} />
                   </span>
                 </div>

@@ -11,6 +11,7 @@ import * as tts from "./engines/tts.js";
 import * as img from "./engines/img.js";
 import { getProgress } from "./lib/progress.js";
 import { getStats } from "./lib/perf.js";
+import { installedAccelIn } from "./lib/backend-manager.js";
 import { augmentMessagesWithWebSearch } from "./lib/websearch.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
@@ -332,16 +333,24 @@ const routes = {
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
 
   "/api/perf": async (req, res) => {
-    const [stats, llmStatus, sttStatus, ttsStatus, imgStatus] = await Promise.all([
+    const [stats, llmStatus, sttStatus, ttsStatus, imgStatus, llmAccel, sttAccel, imgAccel] = await Promise.all([
       getStats(),
       llm.status(),
       stt.status(),
       tts.status(),
       img.status(),
+      installedAccelIn(llm.backendDir),
+      installedAccelIn(stt.backendDir),
+      installedAccelIn(img.backendDir),
     ]);
     sendJson(res, 200, {
       ...stats,
-      engines: { llm: llmStatus, stt: sttStatus, tts: ttsStatus, img: imgStatus },
+      engines: {
+        llm: { ...llmStatus, accel: llmAccel },
+        stt: { ...sttStatus, accel: sttAccel },
+        tts: { ...ttsStatus, accel: "cpu" },
+        img: { ...imgStatus, accel: imgAccel },
+      },
     });
   },
 };
