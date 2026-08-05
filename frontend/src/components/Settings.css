@@ -105,6 +105,47 @@
   border-radius: var(--radius-sm);
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toggle {
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-inset);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex: none;
+}
+.toggle.on {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.toggle.on .toggle-knob {
+  transform: translateX(18px);
+  background: #06201c;
+}
+.toggle-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .settings-select {
   background: var(--bg-inset);
   border: 1px solid var(--border);

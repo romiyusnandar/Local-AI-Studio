@@ -16,6 +16,8 @@ const configPath = path.join(ROOT, "app", "config.json");
 const DEFAULTS = {
   braveApiKey: "",
   imageSize: "512x512",
+  thinkingEnabled: true, // aktifkan mode berpikir model (kirim enable_thinking)
+  thinkingMode: "show", // saat aktif: "show" = tampilkan alur berpikir; "hide" = sembunyikan
 };
 
 let cache = null;
@@ -42,6 +44,8 @@ export function getPublic() {
   return {
     braveApiKeySet: Boolean(s.braveApiKey),
     imageSize: s.imageSize,
+    thinkingEnabled: s.thinkingEnabled,
+    thinkingMode: s.thinkingMode,
   };
 }
 
@@ -52,6 +56,8 @@ export async function update(patch = {}) {
   const next = { ...cur };
   if (typeof patch.braveApiKey === "string") next.braveApiKey = patch.braveApiKey.trim();
   if (typeof patch.imageSize === "string" && /^\d+x\d+$/.test(patch.imageSize)) next.imageSize = patch.imageSize;
+  if (typeof patch.thinkingEnabled === "boolean") next.thinkingEnabled = patch.thinkingEnabled;
+  if (patch.thinkingMode === "show" || patch.thinkingMode === "hide") next.thinkingMode = patch.thinkingMode;
 
   cache = next;
   await fsp.mkdir(path.dirname(configPath), { recursive: true });

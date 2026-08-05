@@ -51,6 +51,15 @@ export default function Settings() {
     }
   }
 
+  async function patchSettings(patch) {
+    try {
+      setSettings(await Api.updateSettings(patch));
+      flashSaved();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   return (
     <div className="settings-panel">
       <div className="panel-head">
@@ -114,6 +123,44 @@ export default function Settings() {
                   </div>
                 )}
               </div>
+
+              <div className="settings-field">
+                <label className="label">Mode berpikir model</label>
+                <p className="settings-help">
+                  Untuk model reasoning (mis. Qwen3, DeepSeek-R1). <b>Aktif</b>: model diminta berpikir dulu sebelum
+                  menjawab. <b>Nonaktif</b>: model diminta langsung menjawab tanpa berpikir.
+                </p>
+                <div className="toggle-row">
+                  <button
+                    type="button"
+                    className={`toggle${settings.thinkingEnabled ? " on" : ""}`}
+                    onClick={() => patchSettings({ thinkingEnabled: !settings.thinkingEnabled })}
+                    aria-pressed={settings.thinkingEnabled}
+                  >
+                    <span className="toggle-knob" />
+                  </button>
+                  <span className="toggle-label">{settings.thinkingEnabled ? "Aktif" : "Nonaktif"}</span>
+                </div>
+              </div>
+
+              {settings.thinkingEnabled && (
+                <div className="settings-field">
+                  <label className="label">Tampilan alur berpikir</label>
+                  <p className="settings-help">
+                    <b>Tampilkan</b>: alur berpikir muncul live + jumlah token, lalu tersimpan sebagai bagian yang bisa
+                    dibuka; jawaban final di bawahnya. <b>Sembunyikan</b>: hanya "berpikir…" + jumlah token, lalu jawaban
+                    final.
+                  </p>
+                  <select
+                    className="settings-select"
+                    value={settings.thinkingMode}
+                    onChange={(e) => patchSettings({ thinkingMode: e.target.value })}
+                  >
+                    <option value="show">Tampilkan alur berpikir</option>
+                    <option value="hide">Sembunyikan (hanya "berpikir…")</option>
+                  </select>
+                </div>
+              )}
             </section>
 
             {/* ---- Gambar ---- */}

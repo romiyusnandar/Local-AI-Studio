@@ -14,6 +14,22 @@ function fileToDataUrl(file) {
   });
 }
 
+// splitThinking memisahkan output model reasoning menjadi bagian "berpikir"
+// (di dalam <think>…</think>) dan "jawaban" (di luarnya). Model biasa yang
+// tidak memakai <think> otomatis dianggap seluruhnya sebagai jawaban.
+function splitThinking(raw) {
+  const openIdx = raw.indexOf("<think>");
+  if (openIdx === -1) return { hasThink: false, thinkDone: false, thinking: "", answer: raw };
+  const afterOpen = raw.slice(openIdx + 7); // panjang "<think>"
+  const closeIdx = afterOpen.indexOf("</think>");
+  if (closeIdx === -1) {
+    return { hasThink: true, thinkDone: false, thinking: afterOpen, answer: raw.slice(0, openIdx) };
+  }
+  const thinking = afterOpen.slice(0, closeIdx);
+  const answer = (raw.slice(0, openIdx) + afterOpen.slice(closeIdx + 8)).replace(/^\s+/, ""); // panjang "</think>"
+  return { hasThink: true, thinkDone: true, thinking, answer };
+}
+
 export default function Chat({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
   const [messages, setMessages] = useState([]);
@@ -22,13 +38,25 @@ export default function Chat({ onOpenModels }) {
   const [sending, setSending] = useState(false);
   const [sessionTokens, setSessionTokens] = useState(0);
   const [webMode, setWebMode] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
+  const [thinkingMode, setThinkingMode] = useState("show");
 
   const abortRef = useRef(null);
   const bodyRef = useRef(null);
   const fileInputRef = useRef(null);
+  const thinkEnabledRef = useRef(true);
 
   useEffect(() => {
     refreshStatus();
+    // Setelan berpikir dibaca dari Pengaturan. Disimpan juga di ref supaya
+    // nilai terbaru terpakai di dalam handler streaming tanpa stale closure.
+    Api.getSettings()
+      .then((s) => {
+        setThinkingEnabled(s.thinkingEnabled !== false);
+        thinkEnabledRef.current = s.thinkingEnabled !== false;
+        setThinkingMode(s.thinkingMode || "show");
+      })
+      .catch(() => {});
     // 1.2s: cukup responsif untuk menampilkan progres pemuatan model.
     const t = setInterval(refreshStatus, 1200);
     return () => clearInterval(t);
@@ -92,7 +120,16 @@ export default function Chat({ onOpenModels }) {
         // henti (mis. mengulang teks acak sampai context penuh).
         // useWeb mengaktifkan mode browsing: server mencari di web dan
         // menyuntikkan hasilnya sebagai konteks sebelum menjawab.
-        { messages: apiMessages, stream: true, max_tokens: 2048, useWeb: webMode, stream_options: { include_usage: true } },
+        // chat_template_kwargs.enable_thinking mengontrol mode berpikir untuk
+        // model reasoning (mis. Qwen3) — false = model langsung menjawab.
+        {
+          messages: apiMessages,
+          stream: true,
+          max_tokens: 2048,
+          useWeb: webMode,
+          chat_template_kwargs: { enable_thinking: thinkingEnabled },
+          stream_options: { include_usage: true },
+        },
         abortRef.current.signal
       );
       if (!res.ok) {
@@ -103,8 +140,10 @@ export default function Chat({ onOpenModels }) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
-      let assistantText = "";
-      let tokenCount = 0; // perkiraan live: ~1 token per delta berisi konten
+      let assistantText = ""; // delta.content = jawaban final
+      let reasoningText = ""; // delta.reasoning_content = alur berpikir
+      let tokenCount = 0; // perkiraan live total token
+      let thinkTokens = 0; // token alur berpikir
       let usage = null;
       let tps = 0;
       let webSources = [];
@@ -112,11 +151,21 @@ export default function Chat({ onOpenModels }) {
       const startedAt = Date.now();
 
       const pushUpdate = () => {
+        // Reasoning bisa datang lewat field reasoning_content (llama.cpp baru)
+        // ATAU sebagai tag <think> di dalam content (build/model lama). Dukung
+        // keduanya.
+        const parsed = reasoningText
+          ? { hasThink: true, thinking: reasoningText, answer: assistantText, thinkDone: assistantText.length > 0 }
+          : splitThinking(assistantText);
         setMessages((prev) => {
           const next = [...prev];
           next[next.length - 1] = {
             role: "assistant",
-            content: assistantText,
+            content: parsed.answer,
+            hasThink: parsed.hasThink,
+            thinkDone: parsed.thinkDone,
+            thinking: parsed.thinking,
+            thinkTokens,
             tokens: usage ? usage.completion_tokens : tokenCount,
             total: usage ? usage.total_tokens : null,
             tps,
@@ -152,12 +201,26 @@ export default function Chat({ onOpenModels }) {
             if (obj.timings && obj.timings.predicted_per_second) {
               tps = Math.round(obj.timings.predicted_per_second);
             }
-            const token = obj.choices?.[0]?.delta?.content;
-            if (token) {
-              assistantText += token;
+            const delta = obj.choices?.[0]?.delta;
+            const secs = () => (Date.now() - startedAt) / 1000;
+
+            // Alur berpikir (field terpisah dari llama.cpp baru).
+            if (delta?.reasoning_content) {
+              reasoningText += delta.reasoning_content;
+              thinkTokens++;
               tokenCount++;
-              const secs = (Date.now() - startedAt) / 1000;
-              if (secs > 0) tps = Math.round(tokenCount / secs);
+              if (secs() > 0) tps = Math.round(tokenCount / secs());
+              pushUpdate();
+            }
+            // Jawaban (dan/atau <think> untuk build/model lama).
+            if (delta?.content) {
+              assistantText += delta.content;
+              tokenCount++;
+              if (!reasoningText) {
+                const s = splitThinking(assistantText);
+                if (s.hasThink && !s.thinkDone) thinkTokens++;
+              }
+              if (secs() > 0) tps = Math.round(tokenCount / secs());
               pushUpdate();
             }
           } catch {
@@ -248,8 +311,41 @@ export default function Chat({ onOpenModels }) {
                 <Globe size={12} /> {m.webError} — dijawab tanpa konteks web
               </div>
             )}
-            <div className="msg-bubble">{m.content}</div>
-            {m.role === "assistant" && m.tokens > 0 && (
+
+            {/* Alur berpikir (model reasoning) — sesuai setelan di Pengaturan.
+                Mode berpikir OFF: jangan tampilkan alur; kalau model tetap
+                berpikir, cukup tunjukkan "memproses…" sampai jawaban muncul. */}
+            {m.role === "assistant" &&
+              m.hasThink &&
+              (!thinkingEnabled ? (
+                !m.thinkDone && (
+                  <div className="think-placeholder">
+                    <span className="think-dot" /> memproses…
+                  </div>
+                )
+              ) : thinkingMode === "hide" ? (
+                !m.thinkDone && (
+                  <div className="think-placeholder">
+                    <span className="think-dot" /> berpikir… · {m.thinkTokens} token
+                  </div>
+                )
+              ) : !m.thinkDone ? (
+                <div className="think-live">
+                  <div className="think-head">
+                    <span className="think-dot" /> berpikir… · {m.thinkTokens} token
+                  </div>
+                  <div className="think-body">{m.thinking}</div>
+                </div>
+              ) : (
+                <details className="think-collapsed">
+                  <summary>Alur berpikir · {m.thinkTokens} token</summary>
+                  <div className="think-body">{m.thinking}</div>
+                </details>
+              ))}
+
+            {(m.role !== "assistant" || m.content) && <div className="msg-bubble">{m.content}</div>}
+
+            {m.role === "assistant" && m.content && m.tokens > 0 && (
               <div className="msg-stats">
                 {m.tokens} token{m.total ? ` · ${m.total} total` : ""}
                 {m.tps > 0 ? ` · ${m.tps} tok/s` : ""}
