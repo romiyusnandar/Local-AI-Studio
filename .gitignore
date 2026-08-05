@@ -22,6 +22,9 @@ frontend/dist/
 # Hasil generate
 /app/outputs/
 
+# Cache pencarian web
+/app/cache/
+
 # Config lokal pengguna
 config.json
 

@@ -11,10 +11,12 @@ import * as tts from "./engines/tts.js";
 import * as img from "./engines/img.js";
 import { getProgress } from "./lib/progress.js";
 import { getStats } from "./lib/perf.js";
+import { augmentMessagesWithWebSearch } from "./lib/websearch.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "frontend", "dist");
+const SEARCH_CACHE_DIR = path.join(__dirname, "..", "app", "cache", "search");
 const PORT = Number(process.env.FRONTEND_PORT) || 1420;
 
 // Default 127.0.0.1: hanya bisa diakses dari komputer ini (aman). Set
@@ -84,23 +86,61 @@ function serveOutput(pathname, res) {
 
 // ---------- handler LLM (chat: proxy SSE, bukan pola model-manager biasa) ----------
 
-// handleChat mem-proxy mentah ke llama-server, meneruskan stream SSE apa
-// adanya. Catatan: kalau client memutus koneksi duluan, itu bukan berarti
-// prosesnya mati — status hidup/mati murni ditentukan monitor() di llm.js
-// lewat event "exit", bukan disentuh di sini.
+// handleChat mem-proxy stream SSE dari llama-server ke browser. Penting:
+// kalau browser menutup koneksi duluan (refresh, tutup tab, tekan Stop),
+// request ke llama-server DIBATALKAN lewat AbortController. Membatalkan
+// fetch menutup koneksi TCP ke backend, dan llama.cpp berhenti membangkitkan
+// token begitu koneksi client-nya putus. Tanpa ini, generasi terus jalan di
+// background (CPU/RAM tetap tinggi) walau tab sudah ditutup.
 async function handleChat(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
   if (!llm.isRunning()) return sendJson(res, 503, { error: "mesin AI sedang mati" });
 
+  const controller = new AbortController();
+  let finished = false;
+
+  // 'close' dipicu saat koneksi ke browser tertutup — baik karena kita
+  // selesai (finished=true) maupun karena client pergi duluan. Hanya batalkan
+  // upstream kalau client pergi sebelum kita selesai.
+  res.on("close", () => {
+    if (!finished) controller.abort();
+  });
+
   try {
+    const raw = [];
+    for await (const chunk of req) raw.push(chunk);
+    const body = JSON.parse(Buffer.concat(raw).toString("utf8") || "{}");
+
+    // Mode browsing: cari di web, suntik hasilnya sebagai konteks. Kegagalan
+    // pencarian (diblokir/timeout/rate-limit) TIDAK menggagalkan chat — kita
+    // lanjut tanpa konteks web dan memberi tahu UI lewat webError.
+    let webSources = [];
+    let webError = "";
+    if (body.useWeb) {
+      try {
+        const aug = await augmentMessagesWithWebSearch(body.messages, { cacheDir: SEARCH_CACHE_DIR });
+        body.messages = aug.messages;
+        webSources = aug.sources;
+        if (!webSources.length) webError = "tidak ada hasil pencarian web";
+      } catch (err) {
+        webError = `pencarian web gagal: ${err.message}`;
+      }
+    }
+
+    // Buang field kustom kita sebelum diteruskan ke llama-server (yang cuma
+    // mengerti field OpenAI standar).
+    delete body.useWeb;
+    delete body.webQuery;
+
     const upstream = await fetch(`http://127.0.0.1:${llm.getPort()}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: Readable.toWeb(req),
-      duplex: "half",
+      body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     if (!upstream.ok || !upstream.body) {
+      finished = true;
       return sendJson(res, 502, { error: "mesin AI tidak merespons" });
     }
 
@@ -109,13 +149,25 @@ async function handleChat(req, res) {
       "Cache-Control": "no-cache",
       "X-Accel-Buffering": "no",
     });
+    // Kirim sumber web (atau info kegagalannya) sebagai event SSE pertama,
+    // sebelum token model, supaya UI bisa menampilkannya lebih dulu.
+    if (body.stream !== false && (webSources.length || webError)) {
+      res.write(`event: web_sources\ndata: ${JSON.stringify({ sources: webSources, error: webError })}\n\n`);
+    }
     for await (const chunk of upstream.body) {
       res.write(chunk);
     }
+    finished = true;
     res.end();
-  } catch {
+  } catch (err) {
+    finished = true;
+    // AbortError = client memutus duluan; itu normal, bukan kegagalan mesin.
+    if (err && err.name === "AbortError") {
+      if (!res.writableEnded) res.end();
+      return;
+    }
     if (!res.headersSent) sendJson(res, 502, { error: "mesin AI tidak merespons" });
-    else res.end();
+    else if (!res.writableEnded) res.end();
   }
 }
 

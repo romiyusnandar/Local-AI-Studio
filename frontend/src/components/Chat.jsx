@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Send, X } from "lucide-react";
+import { Paperclip, Send, X, Square, Globe } from "lucide-react";
 import { Api } from "../services/api.js";
 import { engineStatusText } from "../lib/status.js";
 import "./Chat.css";
@@ -22,6 +22,7 @@ export default function Chat() {
   const [attachedImage, setAttachedImage] = useState(null);
   const [sending, setSending] = useState(false);
   const [sessionTokens, setSessionTokens] = useState(0);
+  const [webMode, setWebMode] = useState(false);
 
   const abortRef = useRef(null);
   const bodyRef = useRef(null);
@@ -109,7 +110,11 @@ export default function Chat() {
       // usage terakhir (prompt/completion/total tokens) supaya angkanya pasti,
       // bukan cuma perkiraan dari jumlah delta.
       const res = await Api.chatStream(
-        { messages: apiMessages, stream: true, stream_options: { include_usage: true } },
+        // max_tokens membatasi panjang balasan supaya model tidak lari tanpa
+        // henti (mis. mengulang teks acak sampai context penuh).
+        // useWeb mengaktifkan mode browsing: server mencari di web dan
+        // menyuntikkan hasilnya sebagai konteks sebelum menjawab.
+        { messages: apiMessages, stream: true, max_tokens: 2048, useWeb: webMode, stream_options: { include_usage: true } },
         abortRef.current.signal
       );
       if (!res.ok) {
@@ -124,6 +129,8 @@ export default function Chat() {
       let tokenCount = 0; // perkiraan live: ~1 token per delta berisi konten
       let usage = null;
       let tps = 0;
+      let webSources = [];
+      let webErr = "";
       const startedAt = Date.now();
 
       const pushUpdate = () => {
@@ -135,6 +142,8 @@ export default function Chat() {
             tokens: usage ? usage.completion_tokens : tokenCount,
             total: usage ? usage.total_tokens : null,
             tps,
+            sources: webSources,
+            webError: webErr,
           };
           return next;
         });
@@ -152,6 +161,14 @@ export default function Chat() {
           if (payload === "[DONE]") continue;
           try {
             const obj = JSON.parse(payload);
+            // event: web_sources — dikirim server sebelum token model kalau
+            // mode browsing aktif. { sources: [...], error: "" }
+            if (obj.sources !== undefined) {
+              webSources = obj.sources || [];
+              webErr = obj.error || "";
+              pushUpdate();
+              continue;
+            }
             // chunk usage/timings terakhir: choices kosong, ada angka pasti
             if (obj.usage) usage = obj.usage;
             if (obj.timings && obj.timings.predicted_per_second) {
@@ -194,6 +211,13 @@ export default function Chat() {
     }
   }
 
+  // stopGeneration membatalkan request stream. Client yang memutus koneksi
+  // membuat server membatalkan request ke llama-server (lihat handleChat),
+  // sehingga generasi benar-benar berhenti, bukan cuma disembunyikan di UI.
+  function stopGeneration() {
+    abortRef.current?.abort();
+  }
+
   return (
     <div className="chat-panel">
       <div className="chat-header">
@@ -232,6 +256,27 @@ export default function Chat() {
           <div key={i} className={`msg msg-${m.role}`}>
             <div className="msg-role">{m.role === "user" ? "kamu" : "asisten"}</div>
             {m.image && <img className="msg-image" src={m.image} alt="lampiran" />}
+            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+              <details className="msg-sources">
+                <summary>
+                  <Globe size={12} /> {m.sources.length} sumber web
+                </summary>
+                <ol>
+                  {m.sources.map((s) => (
+                    <li key={s.index}>
+                      <a href={s.url} target="_blank" rel="noreferrer" title={s.url}>
+                        {s.title || s.url}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+            {m.role === "assistant" && m.webError && (
+              <div className="msg-web-error">
+                <Globe size={12} /> {m.webError} — dijawab tanpa konteks web
+              </div>
+            )}
             <div className="msg-bubble">{m.content}</div>
             {m.role === "assistant" && m.tokens > 0 && (
               <div className="msg-stats">
@@ -257,6 +302,15 @@ export default function Chat() {
           <button type="button" className="icon-btn" onClick={() => fileInputRef.current.click()} title="Lampirkan gambar">
             <Paperclip size={16} />
           </button>
+          <button
+            type="button"
+            className={`icon-btn${webMode ? " web-on" : ""}`}
+            onClick={() => setWebMode((v) => !v)}
+            title={webMode ? "Mode web aktif — cari di internet sebelum menjawab" : "Aktifkan mode web (cari di internet)"}
+            aria-pressed={webMode}
+          >
+            <Globe size={16} />
+          </button>
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onAttachFile} />
           <textarea
             rows={1}
@@ -265,9 +319,15 @@ export default function Chat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
           />
-          <button type="submit" className="icon-btn primary" disabled={sending} title="Kirim">
-            <Send size={16} />
-          </button>
+          {sending ? (
+            <button type="button" className="icon-btn stop" onClick={stopGeneration} title="Hentikan">
+              <Square size={14} />
+            </button>
+          ) : (
+            <button type="submit" className="icon-btn primary" title="Kirim">
+              <Send size={16} />
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -138,6 +138,61 @@
   border-color: var(--amber);
   color: #1a1200;
 }
+.icon-btn.stop {
+  background: #e2574c;
+  border-color: #e2574c;
+  color: #fff;
+}
+.icon-btn.web-on {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #06201c;
+}
+
+.msg-sources {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-inset);
+  padding: 4px 10px;
+  max-width: 520px;
+}
+.msg-sources summary {
+  cursor: pointer;
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  list-style: none;
+}
+.msg-sources summary::-webkit-details-marker {
+  display: none;
+}
+.msg-sources ol {
+  margin: 8px 0 4px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg-sources a {
+  color: var(--text-dim);
+  text-decoration: none;
+  word-break: break-word;
+}
+.msg-sources a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.msg-web-error {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
