@@ -76,6 +76,138 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+.msg-assistant .msg-bubble {
+  white-space: normal;
+}
+
+/* ===== Markdown respons AI ===== */
+.md {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.md > *:first-child {
+  margin-top: 0;
+}
+.md > *:last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0 0 10px;
+}
+.md ul,
+.md ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.md li {
+  margin: 3px 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 14px 0 8px;
+  line-height: 1.3;
+  font-weight: 650;
+}
+.md h1 { font-size: 1.35em; }
+.md h2 { font-size: 1.2em; }
+.md h3 { font-size: 1.08em; }
+.md a {
+  color: var(--teal);
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md strong {
+  font-weight: 650;
+  color: var(--text);
+}
+.md blockquote {
+  margin: 0 0 10px;
+  padding: 2px 12px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-dim);
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+/* code inline */
+.md :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+/* tabel (GFM) */
+.md table {
+  border-collapse: collapse;
+  margin: 0 0 10px;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+.md th {
+  background: var(--bg-inset);
+}
+/* blok kode */
+.md-codeblock {
+  position: relative;
+  margin: 0 0 10px;
+}
+.md-codeblock pre {
+  margin: 0;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.md-codeblock pre code {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.md-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.md-codeblock:hover .md-copy {
+  opacity: 1;
+}
+.md-copy:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
 .msg-user .msg-bubble {
   background: var(--amber-dim);
   border: 1px solid var(--amber);
@@ -135,8 +267,11 @@
   color: var(--text-dim);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 260px;
+  max-height: 200px;
   overflow-y: auto;
+}
+.think-collapsed .think-body {
+  max-height: 300px;
 }
 
 .think-collapsed {

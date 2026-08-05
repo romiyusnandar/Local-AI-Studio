@@ -3,6 +3,7 @@ import { Paperclip, Send, X, Square, Globe } from "lucide-react";
 import { Api } from "../services/api.js";
 import { engineStatusText } from "../lib/status.js";
 import ModelChip from "./ModelChip.jsx";
+import Markdown from "./Markdown.jsx";
 import "./Chat.css";
 
 function fileToDataUrl(file) {
@@ -30,6 +31,15 @@ function splitThinking(raw) {
   return { hasThink: true, thinkDone: true, thinking, answer };
 }
 
+// fmtDuration merangkai lama waktu: "3.2s" atau "1m 5s".
+function fmtDuration(s) {
+  if (!s || s < 0) return "0s";
+  if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return `${m}m ${sec}s`;
+}
+
 export default function Chat({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
   const [messages, setMessages] = useState([]);
@@ -45,6 +55,25 @@ export default function Chat({ onOpenModels }) {
   const bodyRef = useRef(null);
   const fileInputRef = useRef(null);
   const thinkEnabledRef = useRef(true);
+  const pinnedRef = useRef(true); // true = ikuti stream ke bawah otomatis
+  const thinkBodyRef = useRef(null); // kotak reasoning live (scroll internal)
+  const thinkPinnedRef = useRef(true); // ikuti stream di dalam kotak reasoning
+
+  // onBodyScroll menandai apakah pengguna sedang menempel di bawah. Kalau
+  // mereka scroll ke atas (untuk membaca), auto-scroll berhenti; begitu
+  // kembali ke bawah, auto-scroll aktif lagi.
+  function onBodyScroll() {
+    const el = bodyRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  // onThinkScroll: sama seperti onBodyScroll tapi untuk kotak reasoning —
+  // auto-scroll internal berhenti kalau user menggulir ke atas di dalamnya.
+  function onThinkScroll(e) {
+    const el = e.currentTarget;
+    thinkPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }
 
   useEffect(() => {
     refreshStatus();
@@ -63,7 +92,11 @@ export default function Chat({ onOpenModels }) {
   }, []);
 
   useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    const el = bodyRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+    // Kotak reasoning live: auto-scroll internal mengikuti stream reasoning.
+    const tb = thinkBodyRef.current;
+    if (tb && thinkPinnedRef.current) tb.scrollTop = tb.scrollHeight;
   }, [messages]);
 
   async function refreshStatus() {
@@ -105,6 +138,8 @@ export default function Chat({ onOpenModels }) {
     setAttachedImage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setSending(true);
+    pinnedRef.current = true; // kirim pesan baru → selalu ikuti ke bawah
+    thinkPinnedRef.current = true; // reasoning baru → ikuti dari awal
 
     const apiMessages = history.map((m, i) =>
       i === history.length - 1 && hadImage ? { role: m.role, content: apiContent } : { role: m.role, content: m.content }
@@ -144,6 +179,8 @@ export default function Chat({ onOpenModels }) {
       let reasoningText = ""; // delta.reasoning_content = alur berpikir
       let tokenCount = 0; // perkiraan live total token
       let thinkTokens = 0; // token alur berpikir
+      let thinkStart = 0; // waktu mulai berpikir (delta reasoning pertama)
+      let thinkEnd = 0; // waktu berpikir selesai (delta content pertama)
       let usage = null;
       let tps = 0;
       let webSources = [];
@@ -157,6 +194,9 @@ export default function Chat({ onOpenModels }) {
         const parsed = reasoningText
           ? { hasThink: true, thinking: reasoningText, answer: assistantText, thinkDone: assistantText.length > 0 }
           : splitThinking(assistantText);
+        // Lama berpikir: dari delta reasoning pertama sampai jawaban muncul
+        // (atau "sekarang" kalau masih berpikir).
+        const thinkSeconds = thinkStart ? ((thinkEnd || Date.now()) - thinkStart) / 1000 : 0;
         setMessages((prev) => {
           const next = [...prev];
           next[next.length - 1] = {
@@ -166,6 +206,7 @@ export default function Chat({ onOpenModels }) {
             thinkDone: parsed.thinkDone,
             thinking: parsed.thinking,
             thinkTokens,
+            thinkSeconds,
             tokens: usage ? usage.completion_tokens : tokenCount,
             total: usage ? usage.total_tokens : null,
             tps,
@@ -206,6 +247,7 @@ export default function Chat({ onOpenModels }) {
 
             // Alur berpikir (field terpisah dari llama.cpp baru).
             if (delta?.reasoning_content) {
+              if (!thinkStart) thinkStart = Date.now();
               reasoningText += delta.reasoning_content;
               thinkTokens++;
               tokenCount++;
@@ -216,9 +258,15 @@ export default function Chat({ onOpenModels }) {
             if (delta?.content) {
               assistantText += delta.content;
               tokenCount++;
-              if (!reasoningText) {
+              if (reasoningText) {
+                // path reasoning_content: konten pertama = berpikir selesai
+                if (thinkStart && !thinkEnd) thinkEnd = Date.now();
+              } else {
+                // path <think> di dalam content: lacak buka/tutup tag
                 const s = splitThinking(assistantText);
+                if (s.hasThink && !thinkStart) thinkStart = Date.now();
                 if (s.hasThink && !s.thinkDone) thinkTokens++;
+                if (s.thinkDone && thinkStart && !thinkEnd) thinkEnd = Date.now();
               }
               if (secs() > 0) tps = Math.round(tokenCount / secs());
               pushUpdate();
@@ -280,7 +328,7 @@ export default function Chat({ onOpenModels }) {
         </div>
       </div>
 
-      <div className="chat-body" ref={bodyRef}>
+      <div className="chat-body" ref={bodyRef} onScroll={onBodyScroll}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <p>Belum ada percakapan. Pilih model lalu ajukan pertanyaan.</p>
@@ -326,24 +374,32 @@ export default function Chat({ onOpenModels }) {
               ) : thinkingMode === "hide" ? (
                 !m.thinkDone && (
                   <div className="think-placeholder">
-                    <span className="think-dot" /> berpikir… · {m.thinkTokens} token
+                    <span className="think-dot" /> berpikir… · {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
                   </div>
                 )
               ) : !m.thinkDone ? (
                 <div className="think-live">
                   <div className="think-head">
-                    <span className="think-dot" /> berpikir… · {m.thinkTokens} token
+                    <span className="think-dot" /> berpikir… · {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
                   </div>
-                  <div className="think-body">{m.thinking}</div>
+                  <div className="think-body" ref={thinkBodyRef} onScroll={onThinkScroll}>
+                    {m.thinking}
+                  </div>
                 </div>
               ) : (
                 <details className="think-collapsed">
-                  <summary>Alur berpikir · {m.thinkTokens} token</summary>
+                  <summary>
+                    Berpikir selama {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
+                  </summary>
                   <div className="think-body">{m.thinking}</div>
                 </details>
               ))}
 
-            {(m.role !== "assistant" || m.content) && <div className="msg-bubble">{m.content}</div>}
+            {(m.role !== "assistant" || m.content) && (
+              <div className="msg-bubble">
+                {m.role === "assistant" ? <Markdown>{m.content}</Markdown> : m.content}
+              </div>
+            )}
 
             {m.role === "assistant" && m.content && m.tokens > 0 && (
               <div className="msg-stats">
