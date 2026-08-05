@@ -166,9 +166,28 @@ async function searchDuckDuckGo(query, limit, timeFilter) {
   return parseDuckDuckGoHtml(html, limit);
 }
 
-// ---------- provider: Bing (HTML, tanpa API key) ----------
+// ---------- provider: Brave Search API resmi (pakai API key) ----------
 
-// ---------- provider: Brave Search (HTML, tanpa API key) ----------
+// searchBraveApi memakai API resmi Brave (butuh key, gratis 2000/bulan).
+// Ini paling andal — tanpa scraping, tanpa risiko rate-limit fingerprint —
+// jadi kalau key tersedia, ini dicoba lebih dulu.
+async function searchBraveApi(query, limit, key) {
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${Math.min(20, limit)}`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": key },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Brave API HTTP ${res.status}`);
+  const json = await res.json();
+  return (json.web?.results || []).slice(0, limit).map((r) => ({
+    title: stripTags(r.title || ""),
+    url: r.url,
+    snippet: stripTags(r.description || ""),
+    provider: "brave-api",
+  }));
+}
+
+// ---------- provider: Brave Search (HTML scraping, tanpa API key) ----------
 
 function parseBraveHtml(html, limit) {
   const results = [];
@@ -192,82 +211,42 @@ function parseBraveHtml(html, limit) {
   return results;
 }
 
+// searchBrave mencoba beberapa kali dengan jeda menaik. Brave kadang
+// membatasi burst request (429/timeout); retry singkat memulihkan kasus
+// sesaat, jauh lebih baik daripada langsung jatuh ke cadangan atau gagal.
 async function searchBrave(query, limit) {
   const params = new URLSearchParams({ q: query, source: "web" });
-  const html = await requestText(`https://search.brave.com/search?${params.toString()}`);
-  return parseBraveHtml(html, limit);
-}
-
-// ---------- provider: Bing (HTML, tanpa API key) ----------
-
-// extractBingUrl membongkar URL asli dari tautan Bing. Hasil organik Bing
-// sering dibungkus redirect pelacakan "www.bing.com/ck/a?...&u=a1<base64url>";
-// URL tujuan sebenarnya ada di parameter u (diawali "a1" lalu base64url).
-function extractBingUrl(rawHref) {
-  const href = decodeHtml(rawHref);
-  try {
-    const parsed = new URL(href, "https://www.bing.com");
-    if (/(^|\.)bing\.com$/i.test(parsed.hostname) && parsed.pathname.startsWith("/ck/")) {
-      const u = parsed.searchParams.get("u") || "";
-      if (u.startsWith("a1")) {
-        const b64 = u.slice(2).replace(/-/g, "+").replace(/_/g, "/");
-        const decoded = Buffer.from(b64, "base64").toString("utf8");
-        return /^https?:\/\//i.test(decoded) ? decoded : "";
-      }
-      return "";
+  const url = `https://search.brave.com/search?${params.toString()}`;
+  const backoffs = [0, 1500, 3000];
+  let lastErr = null;
+  for (const wait of backoffs) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      return parseBraveHtml(await requestText(url), limit);
+    } catch (err) {
+      lastErr = err;
     }
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.toString();
-  } catch {
-    // href tidak valid
   }
-  return "";
+  throw lastErr;
 }
 
-function parseBingHtml(html, limit) {
-  const results = [];
-  // Tiap hasil organik Bing ada dalam <li class="b_algo"> … </li>.
-  const blockRegex = /<li class="b_algo"[\s\S]*?(?=<li class="b_algo"|<\/ol>|$)/gi;
-  let block;
-  while ((block = blockRegex.exec(html)) && results.length < limit) {
-    const seg = block[0];
-    const a = seg.match(/<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-    if (!a) continue;
-    const url = extractBingUrl(a[1]);
-    const title = stripTags(a[2]);
-    const p = seg.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
-    const snippet = stripTags(p?.[1] || "");
-    if (!/^https?:\/\//i.test(url) || !title || results.some((r) => r.url === url)) continue;
-    results.push({ title, url, snippet, provider: "bing" });
-  }
-  return results;
-}
-
-async function searchBing(query, limit) {
-  const params = new URLSearchParams({ q: query, setlang: "en", count: String(Math.min(20, limit + 5)) });
-  const html = await requestText(`https://www.bing.com/search?${params.toString()}`);
-  return parseBingHtml(html, limit);
-}
-
-// webSearch mencoba beberapa penyedia berurutan dan memakai yang pertama
-// memberi hasil. Sebagian jaringan/ISP memblokir mesin pencari tertentu
-// (mis. DuckDuckGo tak terjangkau di sejumlah jaringan; Bing kadang
-// mengabaikan query untuk klien non-browser), jadi punya cadangan membuat
-// fitur ini jauh lebih andal.
+// webSearch mencoba penyedia berurutan dan memakai yang pertama memberi
+// hasil. Urutan: Brave (paling bersih & konsisten menghormati query) →
+// DuckDuckGo (cadangan). Bing SENGAJA tidak dipakai: untuk klien non-browser
+// ia kerap mengabaikan query penuh dan mengembalikan hasil generik/salah —
+// mis. untuk "siapa presiden Indonesia" ia balas definisi kamus kata "siapa".
+// Konteks keliru ke model lebih berbahaya daripada tanpa konteks web sama
+// sekali, jadi kalau semua gagal chat lanjut tanpa hasil web.
 async function webSearch(query, options = {}) {
   const trimmed = String(query || "").trim();
   if (!trimmed) return [];
   const limit = Math.max(1, Math.min(10, Number(options.limit) || 5));
 
-  // Urutan: Brave (hasil paling bersih) → Bing → DuckDuckGo. Punya beberapa
-  // cadangan penting karena tiap jaringan/klien bisa diblokir/di-rate-limit
-  // penyedia yang berbeda (DuckDuckGo tak terjangkau di sejumlah jaringan;
-  // Brave kadang membatasi klien non-browser). Yang pertama memberi hasil
-  // dipakai; kalau semua gagal, chat lanjut tanpa konteks web.
-  const providers = [
-    () => searchBrave(trimmed, limit),
-    () => searchBing(trimmed, limit),
-    () => searchDuckDuckGo(trimmed, limit, options.timeFilter),
-  ];
+  // Kalau ada Brave API key, pakai API resmi lebih dulu (paling andal).
+  const providers = [];
+  if (options.braveApiKey) providers.push(() => searchBraveApi(trimmed, limit, options.braveApiKey));
+  providers.push(() => searchBrave(trimmed, limit));
+  providers.push(() => searchDuckDuckGo(trimmed, limit, options.timeFilter));
   let lastErr = null;
   for (const run of providers) {
     try {
@@ -462,7 +441,7 @@ export async function comprehensiveWebSearch(query, options = {}) {
   const cached = readCache(cacheDir, cacheKey, options.ttlMs);
   if (cached) return { ...cached, cached: true };
 
-  const results = await webSearch(trimmed, { limit: resultLimit, timeFilter: options.timeFilter });
+  const results = await webSearch(trimmed, { limit: resultLimit, timeFilter: options.timeFilter, braveApiKey: options.braveApiKey });
   const fetched = await Promise.allSettled(
     results.slice(0, fetchLimit).map((r) => fetchPageContent(r.url, { timeoutMs: options.timeoutMs, maxBytes: options.maxBytes }))
   );
@@ -514,6 +493,7 @@ export async function augmentMessagesWithWebSearch(messages, options = {}) {
     resultLimit: options.resultLimit || 5,
     fetchLimit: options.fetchLimit || 3,
     cacheDir: options.cacheDir,
+    braveApiKey: options.braveApiKey,
   });
   if (!result.context || !result.sources.length) return { messages, sources: [] };
 

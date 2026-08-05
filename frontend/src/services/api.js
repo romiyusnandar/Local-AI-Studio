@@ -35,6 +35,8 @@ export const Api = {
   deleteModel: (kind, model) => post(`${BASE[kind]}/models/delete`, { model }),
   progress: () => j("/api/progress"),
   perf: () => j("/api/perf"),
+  getSettings: () => j("/api/settings"),
+  updateSettings: (patch) => post("/api/settings", patch),
 
   chatStream(body, signal) {
     return fetch("/api/chat", {

@@ -92,6 +92,26 @@
   outline: none;
   border-color: var(--border-strong);
 }
+.size-readonly {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.size-hint {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
 .img-generate-btn {
   width: 100%;
   justify-content: center;

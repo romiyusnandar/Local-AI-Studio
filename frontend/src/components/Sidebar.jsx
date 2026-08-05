@@ -1,4 +1,4 @@
-import { MessageSquare, Box, Mic, Volume2, Image, Activity } from "lucide-react";
+import { MessageSquare, Box, Mic, Volume2, Image, Activity, Settings as SettingsIcon } from "lucide-react";
 import "./Sidebar.css";
 
 const ITEMS = [
@@ -8,6 +8,7 @@ const ITEMS = [
   { id: "tts", label: "Teks→Suara", icon: Volume2 },
   { id: "models", label: "Model", icon: Box },
   { id: "system", label: "Sistem", icon: Activity },
+  { id: "settings", label: "Pengaturan", icon: SettingsIcon },
 ];
 
 export default function Sidebar({ active, onSelect }) {

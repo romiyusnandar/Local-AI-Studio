@@ -7,6 +7,7 @@ import Speech from "./components/Speech.jsx";
 import TextToSpeech from "./components/TextToSpeech.jsx";
 import ModelManager from "./components/ModelManager.jsx";
 import System from "./components/System.jsx";
+import Settings from "./components/Settings.jsx";
 
 function App() {
   const [panel, setPanel] = useState("chat");
@@ -23,6 +24,7 @@ function App() {
           {panel === "tts" && <TextToSpeech onOpenModels={() => setPanel("models")} />}
           {panel === "models" && <ModelManager />}
           {panel === "system" && <System />}
+          {panel === "settings" && <Settings />}
         </div>
       </div>
     </div>

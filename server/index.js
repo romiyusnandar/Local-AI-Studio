@@ -13,6 +13,7 @@ import { getProgress } from "./lib/progress.js";
 import { getStats } from "./lib/perf.js";
 import { installedAccelIn } from "./lib/backend-manager.js";
 import { augmentMessagesWithWebSearch } from "./lib/websearch.js";
+import * as settings from "./lib/settings.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -119,7 +120,10 @@ async function handleChat(req, res) {
     let webError = "";
     if (body.useWeb) {
       try {
-        const aug = await augmentMessagesWithWebSearch(body.messages, { cacheDir: SEARCH_CACHE_DIR });
+        const aug = await augmentMessagesWithWebSearch(body.messages, {
+          cacheDir: SEARCH_CACHE_DIR,
+          braveApiKey: settings.get("braveApiKey"),
+        });
         body.messages = aug.messages;
         webSources = aug.sources;
         if (!webSources.length) webError = "tidak ada hasil pencarian web";
@@ -229,6 +233,22 @@ async function handleVoices(req, res) {
   sendJson(res, 200, await tts.getVoices());
 }
 
+// ---------- handler Pengaturan (baca/ubah config, langsung berlaku) ----------
+
+async function handleSettings(req, res) {
+  if (req.method === "GET") return sendJson(res, 200, settings.getPublic());
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan GET atau POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    const updated = await settings.update(body);
+    sendJson(res, 200, updated);
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
+}
+
 // ---------- handler Image (generate/edit: balasan gambar mentah, bukan pola model-manager biasa) ----------
 
 // handleImgGenerate/handleImgEdit mem-proxy ke sd-server dan decode
@@ -331,6 +351,8 @@ const routes = {
   "/api/img/models/delete": imgRoutes.delete,
 
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
+
+  "/api/settings": handleSettings,
 
   "/api/perf": async (req, res) => {
     const [stats, llmStatus, sttStatus, ttsStatus, imgStatus, llmAccel, sttAccel, imgAccel] = await Promise.all([

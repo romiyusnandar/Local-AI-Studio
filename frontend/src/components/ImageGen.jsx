@@ -26,6 +26,8 @@ export default function ImageGen({ onOpenModels }) {
   useEffect(() => {
     refreshStatus();
     refreshHistory();
+    // Ukuran gambar disetel di menu Pengaturan (tersimpan) — baca dari sana.
+    Api.getSettings().then((s) => setSize(s.imageSize || "512x512")).catch(() => {});
     const t = setInterval(refreshStatus, 1200);
     return () => {
       clearInterval(t);
@@ -184,11 +186,10 @@ export default function ImageGen({ onOpenModels }) {
           <textarea rows={4} placeholder="Deskripsikan gambar yang ingin dibuat…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
 
           <label className="label">Ukuran</label>
-          <select className="size-select" value={size} onChange={(e) => setSize(e.target.value)}>
-            <option value="512x512">512 × 512</option>
-            <option value="768x768">768 × 768</option>
-            <option value="1024x1024">1024 × 1024</option>
-          </select>
+          <div className="size-readonly">
+            {size.replace("x", " × ")}
+            <span className="size-hint">atur di Pengaturan</span>
+          </div>
 
           <button className="btn-primary img-generate-btn" onClick={onGenerate} disabled={busy}>
             <ImageIcon size={16} />
