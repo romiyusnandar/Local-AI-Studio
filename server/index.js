@@ -434,9 +434,25 @@ function cleanupChildren() {
 
 let shuttingDown = false;
 function gracefulExit() {
-  if (shuttingDown) return;
+  // Ctrl+C kedua (atau sinyal kedua): jangan tunggu apa pun — paksa keluar.
+  if (shuttingDown) {
+    console.log("mematikan paksa…");
+    process.exit(1);
+  }
   shuttingDown = true;
-  cleanupChildren();
+  console.log("\nmematikan… (tekan Ctrl+C lagi untuk paksa)");
+
+  // Jaring pengaman: apa pun yang terjadi, proses HARUS berhenti. Jika
+  // cleanupChildren tersangkut (mis. taskkill lambat/menggantung), timer ini
+  // memaksa keluar. unref() supaya timer sendiri tidak menahan event loop.
+  const hardKill = setTimeout(() => process.exit(1), 3000);
+  hardKill.unref();
+
+  try {
+    cleanupChildren();
+  } catch {
+    // apa pun errornya, tetap keluar
+  }
   process.exit(0);
 }
 process.on("SIGINT", gracefulExit);

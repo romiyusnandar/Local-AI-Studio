@@ -1,34 +1,48 @@
 {
-  "version": "b10256",
+  "version": "b10280",
   "backends": [
     {
       "os": "windows",
+      "accel": "cuda-13",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-win-cuda-13.3-x64.zip",
+      "runtimeUrl": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/cudart-llama-bin-win-cuda-13.3-x64.zip",
+      "entrypoint": "llama-server.exe"
+    },
+    {
+      "os": "windows",
+      "accel": "cuda-12",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-win-cuda-12.4-x64.zip",
+      "runtimeUrl": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/cudart-llama-bin-win-cuda-12.4-x64.zip",
+      "entrypoint": "llama-server.exe"
+    },
+    {
+      "os": "windows",
       "accel": "vulkan",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-win-vulkan-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-win-vulkan-x64.zip",
       "entrypoint": "llama-server.exe"
     },
     {
       "os": "windows",
       "accel": "cpu",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-win-cpu-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-win-cpu-x64.zip",
       "entrypoint": "llama-server.exe"
     },
     {
       "os": "linux",
       "accel": "cpu",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-ubuntu-x64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-ubuntu-x64.tar.gz",
       "entrypoint": "llama-server"
     },
     {
       "os": "linux",
       "accel": "vulkan",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-ubuntu-vulkan-x64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-ubuntu-vulkan-x64.tar.gz",
       "entrypoint": "llama-server"
     },
     {
       "os": "darwin",
       "accel": "metal",
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10256/llama-b10256-bin-macos-arm64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-macos-arm64.tar.gz",
       "entrypoint": "llama-server"
     }
   ]

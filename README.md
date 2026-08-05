@@ -145,10 +145,9 @@ npm start
 Server akan:
 1. Mendeteksi OS & akselerasi yang tersedia (CUDA/Vulkan/CPU).
 2. Mengunduh backend native yang diperlukan (llama-server, sd-server, whisper-cli) kalau belum ada — ukurannya bisa ratusan MB, hanya terjadi sekali.
-3. Menyalakan mesin Chat (LLM) dan Image Generation kalau sudah ada model terpasang di `app/models/` dan `app/img-models/`.
-4. Berjalan di **http://localhost:1420**
+3. Berjalan di **http://localhost:1420** tanpa memuat model apa pun secara otomatis.
 
-Buka `http://localhost:1420` di browser. Kalau belum ada model, buka panel **Model** di sidebar untuk mengunduh model dari katalog bawaan atau menempelkan URL model sendiri (format `.gguf` untuk chat/image, `.bin` untuk STT).
+Buka `http://localhost:1420` di browser, lalu buka panel **Model** di sidebar untuk memilih model aktif tiap mesin (atau mengunduh dari katalog bawaan / menempelkan URL model sendiri — format `.gguf` untuk chat/image, `.bin` untuk STT). Model tidak dimuat otomatis saat startup; kamu yang memilih kapan tiap mesin dinyalakan lewat panel Model.
 
 ### Mode pengembangan (opsional)
 

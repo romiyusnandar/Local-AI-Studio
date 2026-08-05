@@ -138,6 +138,25 @@ function parseGenLine(line) {
   }
 }
 
+// makeSdTap: parse tiap baris untuk load/gen state, echo hanya baris penting.
+const SD_KEEP = /error|warn|fail|exception|out of memory|loading model|total params|listening on|generate_image|generating image|decoding|completed/i;
+function makeSdTap(out) {
+  let buf = "";
+  return (chunk) => {
+    buf += chunk.toString();
+    const parts = buf.split("\n");
+    buf = parts.pop();
+    for (const line of parts) {
+      for (const sub of line.split("\r")) {
+        if (!sub.trim()) continue;
+        parseLoadLine(sub);
+        parseGenLine(sub);
+      }
+      if (SD_KEEP.test(line)) out.write(line + "\n");
+    }
+  };
+}
+
 export function isRunning() {
   return running;
 }
@@ -216,20 +235,12 @@ async function runSD() {
   // --listen-port, bukan --host / --port.
   const args = ["-m", modelPath, "--listen-ip", "127.0.0.1", "--listen-port", String(p)];
 
-  // stdout & stderr di-pipe (bukan "inherit") supaya bisa di-parse untuk
-  // progres langkah generate, sambil tetap diteruskan ke console apa adanya.
+  // stdout & stderr di-pipe: semua baris di-parse untuk loadState/genState,
+  // tapi yang di-echo ke konsol hanya baris penting (error, pemuatan model,
+  // siap, mulai/selesai generate) — bukan dump metadata atau bar langkah.
   const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
-  const tap = (chunk, out) => {
-    const s = chunk.toString();
-    out.write(s);
-    for (const line of s.split(/\r|\n/)) {
-      if (!line.trim()) continue;
-      parseLoadLine(line);
-      parseGenLine(line);
-    }
-  };
-  child.stdout.on("data", (c) => tap(c, process.stdout));
-  child.stderr.on("data", (c) => tap(c, process.stderr));
+  child.stdout.on("data", makeSdTap(process.stdout));
+  child.stderr.on("data", makeSdTap(process.stderr));
 
   proc = child;
   port = p;

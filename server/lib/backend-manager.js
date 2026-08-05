@@ -27,6 +27,21 @@ async function hasNvidia() {
   }
 }
 
+// nvidiaCudaVersion membaca versi CUDA maksimum yang didukung driver dari
+// header output `nvidia-smi` (mis. "CUDA Version: 13.3"). Ini versi runtime
+// tertinggi yang bisa dijalankan driver, bukan versi toolkit yang terpasang.
+// Mengembalikan major version (13, 12, …) atau 0 kalau NVIDIA tidak ada.
+async function nvidiaCudaVersion() {
+  try {
+    const out = await execFileP("nvidia-smi", []);
+    const m = String(out).match(/CUDA Version:\s*(\d+)/i);
+    if (m) return parseInt(m[1], 10);
+  } catch {
+    // tidak ada NVIDIA / nvidia-smi gagal
+  }
+  return 0;
+}
+
 // hasVulkan mengecek loader Vulkan lewat tool bawaan SDK, atau keberadaan
 // library loader-nya langsung kalau vulkaninfo tidak ada.
 async function hasVulkan() {
@@ -53,12 +68,20 @@ async function hasVulkan() {
   return false;
 }
 
-// detectAccel memilih varian backend berdasarkan hardware. Urutannya dari
-// tercepat ke paling aman: CUDA -> Vulkan -> CPU.
+// detectAccel memilih varian backend berdasarkan hardware. Di Windows kita
+// punya backend CUDA (cuda-12 & cuda-13): pilih sesuai versi CUDA yang
+// didukung driver — driver CUDA 13+ pakai build cuda-13, CUDA 12 pakai
+// cuda-12 (CUDA backward-compatible, jadi selalu ambil yang cocok/kurang).
+// Kalau bukan NVIDIA atau CUDA-nya terlalu tua (<12), jatuh ke Vulkan (kartu
+// NVIDIA pun mendukung Vulkan), lalu CPU. macOS pakai Metal.
 export async function detectAccel() {
   if (process.platform === "darwin") return "metal";
-  if (await hasNvidia()) return "cuda";
-  if (await hasVulkan()) return "vulkan";
+  if (process.platform === "win32") {
+    const cuda = await nvidiaCudaVersion();
+    if (cuda >= 13) return "cuda-13";
+    if (cuda >= 12) return "cuda-12";
+  }
+  if ((await hasNvidia()) || (await hasVulkan())) return "vulkan";
   return "cpu";
 }
 
@@ -68,21 +91,37 @@ function currentOS() {
   return "linux";
 }
 
+// loadManifest membaca manifest backend dan mengganti placeholder {version}
+// di setiap URL dengan manifest.version. Jadi untuk update ke rilis baru cukup
+// ubah satu field "version" di atas — semua URL ikut menyesuaikan otomatis.
 export async function loadManifest(manifestPath) {
   const raw = await fsp.readFile(manifestPath, "utf8");
-  return JSON.parse(raw);
+  const manifest = JSON.parse(raw);
+  const v = manifest.version;
+  if (v) {
+    for (const entry of manifest.backends || []) {
+      if (entry.url) entry.url = entry.url.replaceAll("{version}", v);
+      if (entry.runtimeUrl) entry.runtimeUrl = entry.runtimeUrl.replaceAll("{version}", v);
+    }
+  }
+  return manifest;
 }
 
-// pickBackend memilih entri yang cocok dengan OS dan akselerasi. Kalau
-// varian yang diinginkan tidak ada, mundur ke CPU/metal daripada gagal total.
+// pickBackend memilih entri yang cocok dengan OS dan akselerasi. Kalau varian
+// yang diinginkan tidak ada, mundur bertahap: Vulkan dulu (masih GPU) baru
+// CPU/metal — mis. driver terdeteksi cuda-13 tapi hanya cuda-12 yang ada,
+// sebaiknya pakai Vulkan daripada langsung anjlok ke CPU.
 export function pickBackend(manifest, accel) {
   const os = currentOS();
-  let fallback = null;
+  let vulkan = null;
+  let safe = null;
   for (const entry of manifest.backends) {
     if (entry.os !== os) continue;
     if (entry.accel === accel) return entry;
-    if (entry.accel === "cpu" || entry.accel === "metal") fallback = entry;
+    if (entry.accel === "vulkan") vulkan = entry;
+    if (entry.accel === "cpu" || entry.accel === "metal") safe = entry;
   }
+  const fallback = vulkan || safe;
   if (fallback) return fallback;
   throw new Error(`tidak ada backend untuk ${os}`);
 }
@@ -180,6 +219,24 @@ export async function installBackendInto(dir, manifest, entry) {
     await fsp.rename(tmp, path.join(dir, entry.entrypoint));
   }
   await fsp.rm(tmp, { force: true });
+
+  // Backend CUDA butuh DLL runtime CUDA (cudart, cublas, dst.) yang dirilis
+  // dalam arsip terpisah dari binary llama-server. Unduh & ekstrak ke folder
+  // yang sama supaya llama-server.exe menemukan DLL-nya saat start.
+  if (entry.runtimeUrl) {
+    console.log(`mengunduh runtime CUDA untuk ${entry.accel}...`);
+    setProgress({ active: true, label: "Mengunduh runtime CUDA" });
+    const rtTmp = path.join(path.dirname(dir), path.basename(dir) + ".runtime.part");
+    try {
+      await downloadWithResume(entry.runtimeUrl, rtTmp, undefined);
+    } catch (err) {
+      setProgress({ error: err.message, done: true });
+      throw err;
+    }
+    setProgress({ active: true, label: "Mengekstrak runtime CUDA...", percent: 100 });
+    extractZipFlat(rtTmp, dir);
+    await fsp.rm(rtTmp, { force: true });
+  }
 
   if (process.platform !== "win32") {
     await fsp.chmod(path.join(dir, entry.entrypoint), 0o755).catch(() => {});

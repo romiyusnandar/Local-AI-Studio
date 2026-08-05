@@ -49,6 +49,62 @@
       "note": "Model serba guna kualitas tinggi. Untuk mesin dengan RAM/VRAM besar."
     },
     {
+      "name": "Gemma 2 2B Instruct",
+      "file": "gemma-2-2b-it-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+      "sizeBytes": 1708000000,
+      "multimodal": false,
+      "note": "Model kecil buatan Google dengan kualitas jawaban bagus untuk ukurannya."
+    },
+    {
+      "name": "Llama 3.2 3B Instruct",
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "sizeBytes": 2019000000,
+      "multimodal": false,
+      "note": "Serba guna & ringkas dari Meta. Seimbang antara kualitas dan kecepatan."
+    },
+    {
+      "name": "Phi-3.5 mini Instruct",
+      "file": "Phi-3.5-mini-instruct-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+      "sizeBytes": 2393000000,
+      "multimodal": false,
+      "note": "Model Microsoft yang kuat di penalaran & instruksi meski ukurannya kecil."
+    },
+    {
+      "name": "Mistral 7B Instruct v0.3",
+      "file": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "sizeBytes": 4372000000,
+      "multimodal": false,
+      "note": "Model 7B klasik berkualitas. Untuk mesin RAM/VRAM menengah-tinggi."
+    },
+    {
+      "name": "DeepSeek-R1 Distill Qwen 1.5B (reasoning)",
+      "file": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+      "sizeBytes": 1117000000,
+      "multimodal": false,
+      "note": "Model reasoning (berpikir dulu sebelum menjawab). Kecil & cepat — cocok mencoba mode berpikir."
+    },
+    {
+      "name": "Qwen3 4B (reasoning)",
+      "file": "Qwen3-4B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+      "sizeBytes": 2497000000,
+      "multimodal": false,
+      "note": "Model reasoning modern, bisa on/off mode berpikir. Kualitas jauh di atas 0.6B."
+    },
+    {
+      "name": "Dolphin 3.0 Llama 3.2 3B (uncensored)",
+      "file": "Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/Dolphin3.0-Llama3.2-3B-GGUF/resolve/main/Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf",
+      "sizeBytes": 2019000000,
+      "multimodal": false,
+      "note": "Model tanpa sensor (uncensored) — menjawab lebih terbuka tanpa penolakan. Ringan."
+    },
+    {
       "name": "Qwen2-VL 2B Instruct (vision)",
       "file": "Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
       "url": "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
@@ -60,15 +116,24 @@
       "note": "Multimodal ringan & modern — bisa memahami gambar. Kualitas visi lebih baik dari LLaVA 1.5. Proyektor otomatis ikut terunduh."
     },
     {
-      "name": "LLaVA 1.5 7B (vision)",
-      "file": "ggml-model-q4_k.gguf",
-      "url": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/ggml-model-q4_k.gguf",
-      "sizeBytes": 4081004224,
+      "name": "Qwen2-VL 2B abliterated (uncensored, vision)",
+      "file": "Qwen2-VL-2B-Instruct-abliterated.Q4_K_M.gguf",
+      "url": "https://huggingface.co/mradermacher/Qwen2-VL-2B-Instruct-abliterated-GGUF/resolve/main/Qwen2-VL-2B-Instruct-abliterated.Q4_K_M.gguf",
+      "sizeBytes": 1117000000,
       "multimodal": true,
-      "projectorFile": "mmproj-model-f16.gguf",
-      "projectorUrl": "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/mmproj-model-f16.gguf",
-      "projectorSizeBytes": 624434336,
-      "note": "Model multimodal lawas — bisa memahami gambar. Besar (7B). Proyektor visi otomatis ikut terunduh."
+      "projectorFile": "Qwen2-VL-2B-Instruct-abliterated.mmproj-fp16.gguf",
+      "projectorUrl": "https://huggingface.co/mradermacher/Qwen2-VL-2B-Instruct-abliterated-GGUF/resolve/main/Qwen2-VL-2B-Instruct-abliterated.mmproj-fp16.gguf",
+      "projectorSizeBytes": 1332000000,
+      "multimodalNote": "Qwen2-VL abliterated",
+      "note": "Vision TANPA sensor — mendeskripsikan gambar apa pun (termasuk foto orang/keluarga) tanpa menolak. Ringan (2B)."
+    },
+    {
+      "name": "DeepSeek-R1-0528 Qwen3 8B (reasoning)",
+      "file": "DeepSeek-R1-0528-Qwen3-8B-Q4_K_S.gguf",
+      "url": "https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/resolve/main/DeepSeek-R1-0528-Qwen3-8B-Q4_K_S.gguf",
+      "sizeBytes": 4802013696,
+      "multimodal": false,
+      "note": "Model reasoning modern, kualitas jawaban sangat tinggi, tapi butuh RAM/VRAM besar."
     }
   ]
 }

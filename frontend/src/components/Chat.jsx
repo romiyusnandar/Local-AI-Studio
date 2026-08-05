@@ -6,12 +6,28 @@ import ModelChip from "./ModelChip.jsx";
 import Markdown from "./Markdown.jsx";
 import "./Chat.css";
 
-function fileToDataUrl(file) {
+// resizeImageToDataUrl memperkecil gambar (sisi terpanjang ≤ maxDim) sebelum
+// dikirim ke model vision. Gambar besar diubah jadi ratusan/ribuan "token
+// visual" yang SANGAT lambat diproses di CPU/GPU terintegrasi (mis. foto
+// 1835px bisa >3 menit). Perkecil ke ~1024px memangkasnya drastis tanpa
+// banyak kehilangan detail. Encode JPEG supaya payload kecil.
+function resizeImageToDataUrl(file, maxDim = 1024) {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
@@ -115,8 +131,11 @@ export default function Chat({ onOpenModels }) {
   async function onAttachFile(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setAttachedImage(dataUrl);
+    try {
+      setAttachedImage(await resizeImageToDataUrl(file));
+    } catch {
+      alert("Gagal membaca gambar.");
+    }
   }
 
   async function sendMessage(e) {

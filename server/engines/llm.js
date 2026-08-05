@@ -95,6 +95,23 @@ function parseLoadLine(line) {
   }
 }
 
+// makeLlamaTap: parse tiap baris untuk loadState, tapi hanya echo baris
+// penting ke konsol. Buffer per-stream supaya baris tidak terpotong antar
+// chunk.
+const LLAMA_KEEP = /error|warn|fail|exception|unable|cannot|unknown|out of memory|assert|loading model|model loaded|listening on/i;
+function makeLlamaTap(out) {
+  let buf = "";
+  return (chunk) => {
+    buf += chunk.toString();
+    const parts = buf.split("\n");
+    buf = parts.pop();
+    for (const line of parts) {
+      for (const sub of line.split("\r")) if (sub.trim()) parseLoadLine(sub);
+      if (LLAMA_KEEP.test(line)) out.write(line + "\n");
+    }
+  };
+}
+
 export function isRunning() {
   return running;
 }
@@ -194,18 +211,13 @@ async function runLlama() {
   const proj = await projectorFor(modelPath);
   if (proj) args.push("--mmproj", proj);
 
-  // stdout & stderr di-pipe (bukan "inherit") supaya log pemuatan model
-  // bisa di-parse untuk loadState, sambil tetap diteruskan ke console.
+  // stdout & stderr di-pipe (bukan "inherit"): SEMUA baris tetap di-parse
+  // untuk loadState, tapi yang di-echo ke konsol hanya baris PENTING —
+  // error/peringatan, pemuatan model, dan "listening". Metadata/tensor dump
+  // dan spam timing per-token llama.cpp tidak ditampilkan agar log bersih.
   const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
-  const tap = (chunk, out) => {
-    const s = chunk.toString();
-    out.write(s);
-    for (const line of s.split(/\r|\n/)) {
-      if (line.trim()) parseLoadLine(line);
-    }
-  };
-  child.stdout.on("data", (c) => tap(c, process.stdout));
-  child.stderr.on("data", (c) => tap(c, process.stderr));
+  child.stdout.on("data", makeLlamaTap(process.stdout));
+  child.stderr.on("data", makeLlamaTap(process.stderr));
 
   proc = child;
   port = p;

@@ -41,6 +41,27 @@
       "url": "https://huggingface.co/RunDiffusion/Juggernaut-XL-Lightning/resolve/main/Juggernaut_RunDiffusionPhoto2_Lightning_4Steps.safetensors",
       "sizeBytes": 7105348284,
       "note": "SDXL fotorealistik, generate cepat (4-8 step). Butuh RAM/VRAM besar. 1024x1024."
+    },
+    {
+      "name": "Realistic Vision V5.1",
+      "file": "Realistic_Vision_V5.1_fp16-no-ema.safetensors",
+      "url": "https://huggingface.co/SG161222/Realistic_Vision_V5.1_noVAE/resolve/main/Realistic_Vision_V5.1_fp16-no-ema.safetensors",
+      "sizeBytes": 2132000000,
+      "note": "SD 1.5 fotorealistik populer, ringan. Bagus untuk potret & foto. 512x512."
+    },
+    {
+      "name": "SDXL Turbo",
+      "file": "sd_xl_turbo_1.0_fp16.safetensors",
+      "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/main/sd_xl_turbo_1.0_fp16.safetensors",
+      "sizeBytes": 6938040682,
+      "note": "SDXL super cepat — hanya 1-4 step per gambar. Cocok untuk mesin lambat karena step-nya sedikit. 512x512."
+    },
+    {
+      "name": "Animagine XL 3.1 (anime)",
+      "file": "animagine-xl-3.1.safetensors",
+      "url": "https://huggingface.co/cagliostrolab/animagine-xl-3.1/resolve/main/animagine-xl-3.1.safetensors",
+      "sizeBytes": 6938040682,
+      "note": "SDXL khusus anime kualitas tinggi. Butuh RAM/VRAM besar. 1024x1024."
     }
   ]
 }
