@@ -13,6 +13,8 @@ import {
   isGGUF,
 } from "../lib/models.js";
 import { cancelDownload as cancelDownloadShared, isDownloadActive } from "../lib/download-state.js";
+import { contextForModel } from "../lib/settings.js";
+import { readContextLength } from "../lib/gguf.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..", "..");
@@ -153,6 +155,24 @@ export async function ensureBackend() {
 // ---------- model (delegasi ke lib/models.js yang generik) ----------
 
 export const listModels = () => listModelsIn(modelDir, MODEL_EXTS);
+
+// contextLimits mengembalikan { namaFile: n_ctx_train } untuk tiap model chat
+// terpasang — batas context yang dilatih model, dibaca dari metadata GGUF.
+// Di-cache per file karena parsing baca dari disk (metadata tidak berubah
+// selama file sama).
+const ctxLimitCache = new Map();
+export async function contextLimits() {
+  const files = await listModels();
+  const out = {};
+  for (const f of files) {
+    if (!ctxLimitCache.has(f)) {
+      ctxLimitCache.set(f, (await readContextLength(path.join(modelDir, f))) || 0);
+    }
+    const v = ctxLimitCache.get(f);
+    if (v) out[f] = v;
+  }
+  return out;
+}
 export const isValidModel = (name) => isValidModelIn(modelDir, MODEL_EXTS, name);
 export const loadCatalog = () => loadCatalogFrom(catalogPath);
 export const cancelDownload = cancelDownloadShared;
@@ -208,6 +228,14 @@ async function runLlama() {
   const bin = path.join(backendDir, process.platform === "win32" ? "llama-server.exe" : "llama-server");
 
   const args = ["-m", modelPath, "--host", "127.0.0.1", "--port", String(p)];
+
+  // -c menetapkan context window (n_ctx). Nilainya per-model dari Pengaturan
+  // (atau default) — makin besar makin panjang riwayat+balasan yang muat, tapi
+  // makin besar pula RAM/VRAM yang dipakai. Dibatasi context maksimum yang
+  // dilatih model itu sendiri.
+  const ctx = contextForModel(activeModel);
+  if (ctx) args.push("-c", String(ctx));
+
   const proj = await projectorFor(modelPath);
   if (proj) args.push("--mmproj", proj);
 

@@ -175,8 +175,10 @@ export default function Chat({ onOpenModels }) {
       // usage terakhir (prompt/completion/total tokens) supaya angkanya pasti,
       // bukan cuma perkiraan dari jumlah delta.
       const res = await Api.chatStream(
-        // max_tokens membatasi panjang balasan supaya model tidak lari tanpa
-        // henti (mis. mengulang teks acak sampai context penuh).
+        // max_tokens = -1: tak ada batas panjang balasan — model berhenti
+        // sendiri saat mengeluarkan token stop/EOS. Batas keras satu-satunya
+        // jadi ukuran context window (n_ctx); kalau model "kabur" mengulang
+        // teks, tombol Stop bisa menghentikannya manual.
         // useWeb mengaktifkan mode browsing: server mencari di web dan
         // menyuntikkan hasilnya sebagai konteks sebelum menjawab.
         // chat_template_kwargs.enable_thinking mengontrol mode berpikir untuk
@@ -184,7 +186,7 @@ export default function Chat({ onOpenModels }) {
         {
           messages: apiMessages,
           stream: true,
-          max_tokens: 2048,
+          max_tokens: -1,
           useWeb: webMode,
           chat_template_kwargs: { enable_thinking: thinkingEnabled },
           stream_options: { include_usage: true },

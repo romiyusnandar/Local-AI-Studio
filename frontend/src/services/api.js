@@ -30,6 +30,7 @@ export const Api = {
   models: (kind = "llm") => j(`${BASE[kind]}/models`),
   catalog: (kind = "llm") => j(`${BASE[kind]}/catalog`),
   selectModel: (kind, model) => post(`${BASE[kind]}/models/select`, { model }),
+  ctxLimits: () => j("/api/models/ctx-limits"),
   downloadModel: (kind, url, projectorUrl) => post(`${BASE[kind]}/models/download`, projectorUrl ? { url, projectorUrl } : { url }),
   cancelDownload: (kind = "llm") => post(`${BASE[kind]}/models/cancel`),
   deleteModel: (kind, model) => post(`${BASE[kind]}/models/delete`, { model }),

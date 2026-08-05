@@ -236,6 +236,16 @@ async function handleVoices(req, res) {
 
 // ---------- handler Pengaturan (baca/ubah config, langsung berlaku) ----------
 
+// handleCtxLimits: { limits: { namaFile: n_ctx_train } } untuk model chat
+// terpasang — dipakai UI menampilkan & membatasi input context per model.
+async function handleCtxLimits(req, res) {
+  try {
+    sendJson(res, 200, { limits: await llm.contextLimits() });
+  } catch (err) {
+    sendJson(res, 500, { error: err.message });
+  }
+}
+
 async function handleSettings(req, res) {
   if (req.method === "GET") return sendJson(res, 200, settings.getPublic());
   if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan GET atau POST" });
@@ -243,7 +253,29 @@ async function handleSettings(req, res) {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+
+    // Backstop: batasi override context per-model ke n_ctx_train model itu —
+    // mencegah nilai di atas context latih (yang bikin output melantur), meski
+    // request datang langsung ke API tanpa lewat UI.
+    if (body.contextSizes && typeof body.contextSizes === "object") {
+      const limits = await llm.contextLimits();
+      for (const [file, val] of Object.entries(body.contextSizes)) {
+        const lim = limits[file];
+        const n = Number(val);
+        if (lim && Number.isFinite(n) && n > lim) body.contextSizes[file] = lim;
+      }
+    }
+
+    // n_ctx ditetapkan saat llama-server dinyalakan, jadi kalau context efektif
+    // model yang SEDANG aktif berubah, engine perlu di-restart agar -c baru
+    // dipakai. Bandingkan sebelum/sesudah update untuk model aktif saja.
+    const active = llm.getActiveModel();
+    const ctxBefore = active ? settings.contextForModel(active) : 0;
     const updated = await settings.update(body);
+    if (active && llm.isRunning() && settings.contextForModel(active) !== ctxBefore) {
+      llm.selectModel(active); // restart dengan context baru (non-blocking)
+    }
+
     sendJson(res, 200, updated);
   } catch (err) {
     sendJson(res, 400, { error: err.message });
@@ -314,6 +346,7 @@ const routes = {
   "/api/chat": handleChat,
   "/api/models": llmRoutes.models,
   "/api/models/select": llmRoutes.select,
+  "/api/models/ctx-limits": handleCtxLimits,
   "/api/catalog": llmRoutes.catalog,
   "/api/models/download": llmRoutes.download,
   "/api/models/cancel": llmRoutes.cancel,

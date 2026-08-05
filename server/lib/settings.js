@@ -18,7 +18,15 @@ const DEFAULTS = {
   imageSize: "512x512",
   thinkingEnabled: true, // aktifkan mode berpikir model (kirim enable_thinking)
   thinkingMode: "show", // saat aktif: "show" = tampilkan alur berpikir; "hide" = sembunyikan
+  contextSizeDefault: 4096, // n_ctx dipakai saat model tak punya override
+  contextSizes: {}, // override per-model: { [namaFileModel]: n_ctx (token) }
 };
+
+// Batas n_ctx yang wajar: minimum masih berguna, maksimum menahan pengguna
+// tak sengaja minta context raksasa yang bikin kehabisan RAM/VRAM.
+const CTX_MIN = 512;
+const CTX_MAX = 131072;
+const clampCtx = (v) => Math.min(CTX_MAX, Math.max(CTX_MIN, Math.round(v)));
 
 let cache = null;
 
@@ -46,7 +54,17 @@ export function getPublic() {
     imageSize: s.imageSize,
     thinkingEnabled: s.thinkingEnabled,
     thinkingMode: s.thinkingMode,
+    contextSizeDefault: s.contextSizeDefault,
+    contextSizes: { ...s.contextSizes },
   };
+}
+
+// contextForModel: n_ctx efektif untuk satu model — override per-model kalau
+// ada, kalau tidak pakai default. Dipakai llm.js saat menyalakan llama-server.
+export function contextForModel(modelFile) {
+  const s = load();
+  const v = s.contextSizes?.[modelFile];
+  return Number.isFinite(v) && v > 0 ? v : s.contextSizeDefault;
 }
 
 // update menerima patch sebagian; hanya field yang dikenal yang disimpan.
@@ -58,6 +76,20 @@ export async function update(patch = {}) {
   if (typeof patch.imageSize === "string" && /^\d+x\d+$/.test(patch.imageSize)) next.imageSize = patch.imageSize;
   if (typeof patch.thinkingEnabled === "boolean") next.thinkingEnabled = patch.thinkingEnabled;
   if (patch.thinkingMode === "show" || patch.thinkingMode === "hide") next.thinkingMode = patch.thinkingMode;
+
+  if (Number.isFinite(patch.contextSizeDefault)) next.contextSizeDefault = clampCtx(patch.contextSizeDefault);
+
+  // contextSizes patch bersifat merge: { file: angka } menyetel/override,
+  // { file: 0 } atau null menghapus override (kembali ke default).
+  if (patch.contextSizes && typeof patch.contextSizes === "object") {
+    const map = { ...next.contextSizes };
+    for (const [file, val] of Object.entries(patch.contextSizes)) {
+      const n = Number(val);
+      if (!val || n === 0) delete map[file];
+      else if (Number.isFinite(n)) map[file] = clampCtx(n);
+    }
+    next.contextSizes = map;
+  }
 
   cache = next;
   await fsp.mkdir(path.dirname(configPath), { recursive: true });
