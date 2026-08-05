@@ -1,11 +1,43 @@
 {
   "models": [
     {
-      "name": "Kokoro TTS (no espeak, Q8)",
-      "file": "Kokoro_no_espeak_Q8.gguf",
-      "url": "https://huggingface.co/mmwillet2/Kokoro_GGUF/resolve/main/Kokoro_no_espeak_Q8.gguf",
-      "sizeBytes": 206432608,
-      "note": "Ringan, tidak butuh espeak-ng eksternal. Cocok untuk mencoba."
+      "id": "kokoro-onnx-q8",
+      "type": "kokoro",
+      "name": "Kokoro 82M ONNX (Q8) — English",
+      "file": "kokoro-onnx-q8.json",
+      "url": "kokoro://install/kokoro-onnx-q8",
+      "modelId": "onnx-community/Kokoro-82M-v1.0-ONNX",
+      "dtype": "q8",
+      "sizeBytes": 0,
+      "size": "Bobot di-cache kokoro-js saat pertama dipakai",
+      "recommended": true,
+      "note": "Bahasa Inggris (US/UK). Ringan & cepat di CPU."
+    },
+    {
+      "id": "kokoro-onnx-fp32",
+      "type": "kokoro",
+      "name": "Kokoro 82M ONNX (FP32) — English",
+      "file": "kokoro-onnx-fp32.json",
+      "url": "kokoro://install/kokoro-onnx-fp32",
+      "modelId": "onnx-community/Kokoro-82M-v1.0-ONNX",
+      "dtype": "fp32",
+      "sizeBytes": 0,
+      "size": "Bobot di-cache kokoro-js saat pertama dipakai",
+      "recommended": false,
+      "note": "Bahasa Inggris, presisi penuh — kualitas sedikit lebih baik, lebih berat."
+    },
+    {
+      "id": "piper-id-news-medium",
+      "type": "piper",
+      "name": "Piper — Bahasa Indonesia (news, medium)",
+      "file": "piper-id-news-medium.json",
+      "url": "piper://install/piper-id-news-medium",
+      "onnxUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/id/id_ID/news_tts/medium/id_ID-news_tts-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/id/id_ID/news_tts/medium/id_ID-news_tts-medium.onnx.json",
+      "onnxFile": "id_ID-news_tts-medium.onnx",
+      "sizeBytes": 62950044,
+      "recommended": false,
+      "note": "Suara Bahasa Indonesia asli. Mengunduh ~60MB voice + binary Piper (~22MB) sekali."
     }
   ]
 }

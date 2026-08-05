@@ -3,12 +3,13 @@ import { Download, Trash2 } from "lucide-react";
 import { Api } from "../services/api.js";
 import "./ModelManager.css";
 
-// Baru "llm" (Chat) yang punya mesin sungguhan sekarang. Tab TTS/STT/Image
-// tinggal ditambahkan di sini begitu fase-nya masing-masing selesai —
-// tidak perlu ubah struktur komponen ini lagi.
+// Tiap jenis mesin punya tab sendiri; komponen ini generik, tidak perlu
+// diubah per jenis. noCustom: TTS tidak menerima URL kustom (modelnya varian
+// Kokoro bawaan yang dipasang dari katalog, bukan file dari Hugging Face).
 const KINDS = [
   { id: "llm", label: "Chat", ext: ".gguf" },
   { id: "stt", label: "Suara→Teks", ext: ".bin" },
+  { id: "tts", label: "Teks→Suara", ext: "kokoro", noCustom: true },
   { id: "img", label: "Gambar", ext: ".gguf/.safetensors" },
 ];
 
@@ -164,7 +165,7 @@ export default function ModelManager() {
                   {item.note && <div className="model-row-note">{item.note}</div>}
                 </div>
                 <div className="model-row-size">
-                  {formatBytes(item.sizeBytes)}
+                  {item.sizeBytes ? formatBytes(item.sizeBytes) : item.size || ""}
                   {item.projectorSizeBytes ? ` + ${formatBytes(item.projectorSizeBytes)} proyektor` : ""}
                 </div>
                 {item.installed ? (
@@ -195,20 +196,22 @@ export default function ModelManager() {
               </div>
             )}
 
-            <div className="custom-url">
-              <label>Atau tempel URL Hugging Face ({activeKind.ext})</label>
-              <div className="custom-url-row">
-                <input
-                  value={customUrl}
-                  onChange={(e) => setCustomUrl(e.target.value)}
-                  placeholder="https://huggingface.co/..."
-                />
-                <button className="btn-sm" onClick={onCustomInstall}>
-                  <Download size={14} />
-                  <span>Unduh</span>
-                </button>
+            {!activeKind.noCustom && (
+              <div className="custom-url">
+                <label>Atau tempel URL Hugging Face ({activeKind.ext})</label>
+                <div className="custom-url-row">
+                  <input
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                    placeholder="https://huggingface.co/..."
+                  />
+                  <button className="btn-sm" onClick={onCustomInstall}>
+                    <Download size={14} />
+                    <span>Unduh</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

@@ -225,7 +225,7 @@ async function handleSpeak(req, res) {
 }
 
 async function handleVoices(req, res) {
-  sendJson(res, 200, { voices: tts.VOICES });
+  sendJson(res, 200, await tts.getVoices());
 }
 
 // ---------- handler Image (generate/edit: balasan gambar mentah, bukan pola model-manager biasa) ----------
@@ -282,6 +282,7 @@ async function handleImgHistoryDelete(req, res) {
 
 const llmRoutes = makeEngineRoutes(llm);
 const sttRoutes = makeEngineRoutes(stt);
+const ttsRoutes = makeEngineRoutes(tts);
 const imgRoutes = makeEngineRoutes(img);
 
 const routes = {
@@ -305,9 +306,15 @@ const routes = {
   "/api/stt/models/cancel": sttRoutes.cancel,
   "/api/stt/models/delete": sttRoutes.delete,
 
-  "/api/tts/status": (req, res) => tts.status().then((s) => sendJson(res, 200, s)),
+  "/api/tts/status": ttsRoutes.status,
   "/api/tts/speak": handleSpeak,
   "/api/tts/voices": handleVoices,
+  "/api/tts/models": ttsRoutes.models,
+  "/api/tts/models/select": ttsRoutes.select,
+  "/api/tts/catalog": ttsRoutes.catalog,
+  "/api/tts/models/download": ttsRoutes.download,
+  "/api/tts/models/cancel": ttsRoutes.cancel,
+  "/api/tts/models/delete": ttsRoutes.delete,
 
   "/api/img/status": imgRoutes.status,
   "/api/img/generate": handleImgGenerate,
@@ -389,6 +396,10 @@ async function main() {
   } else {
     console.log(`belum ada model STT — taruh file .bin di ${stt.modelDir}/`);
   }
+
+  // TTS: pasang model Kokoro rekomendasi (Q8) kalau belum ada, lalu set aktif.
+  // Bobotnya di-cache kokoro-js saat generate pertama.
+  await tts.ensureDefaultModel();
 
   try {
     await img.ensureBackend();

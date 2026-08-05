@@ -11,13 +11,40 @@ export default function TextToSpeech() {
   const [busy, setBusy] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const urlRef = useRef(null);
+  const lastModelRef = useRef("");
+
+  async function refreshVoices() {
+    try {
+      const d = await Api.ttsVoices();
+      const list = d.voices || [];
+      setVoices(list);
+      // Kalau voice terpilih tidak ada di daftar model baru, ikuti yang pertama.
+      setVoice((v) => (list.includes(v) ? v : list[0] || ""));
+    } catch {
+      setVoices([]);
+    }
+  }
 
   useEffect(() => {
-    Api.status("tts").then(setStatus).catch(() => {});
-    Api.ttsVoices()
-      .then((d) => setVoices(d.voices || []))
-      .catch(() => {});
+    refreshVoices();
+    // Pantau model aktif; daftar suara ikut model (Kokoro vs Piper), jadi
+    // refresh voices tiap kali model berganti dari Model Manager.
+    const tick = async () => {
+      try {
+        const s = await Api.status("tts");
+        setStatus(s);
+        if (s.model !== lastModelRef.current) {
+          lastModelRef.current = s.model;
+          refreshVoices();
+        }
+      } catch {
+        // diamkan
+      }
+    };
+    tick();
+    const t = setInterval(tick, 2500);
     return () => {
+      clearInterval(t);
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     };
   }, []);
@@ -49,14 +76,17 @@ export default function TextToSpeech() {
             <span>{status.mesinHidup ? `siap — ${status.model}` : "memeriksa mesin…"}</span>
           </div>
         </div>
-        <select value={voice} onChange={(e) => setVoice(e.target.value)} disabled={voices.length === 0}>
-          {voices.length === 0 && <option>Memuat suara…</option>}
-          {voices.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
+        {voices.length > 0 ? (
+          <select value={voice} onChange={(e) => setVoice(e.target.value)}>
+            {voices.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="voice-single">Suara tunggal (mengikuti model)</span>
+        )}
       </div>
 
       <div className="tts-body">

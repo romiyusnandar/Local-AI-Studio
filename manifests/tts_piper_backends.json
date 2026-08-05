@@ -1,0 +1,23 @@
+{
+  "version": "2023.11.14-2",
+  "backends": [
+    {
+      "os": "windows",
+      "accel": "cpu",
+      "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+      "entrypoint": "piper.exe"
+    },
+    {
+      "os": "linux",
+      "accel": "cpu",
+      "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz",
+      "entrypoint": "piper"
+    },
+    {
+      "os": "darwin",
+      "accel": "cpu",
+      "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz",
+      "entrypoint": "piper"
+    }
+  ]
+}

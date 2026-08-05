@@ -24,6 +24,12 @@
   border-radius: 3px;
   min-width: 180px;
 }
+.voice-single {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  align-self: center;
+}
 
 .tts-body {
   flex: 1;

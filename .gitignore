@@ -5,8 +5,12 @@ frontend/dist/
 # Backend inference — diunduh terpisah, ratusan MB
 /app/backend/
 /app/tts-backend/
+/app/tts-piper-backend/
 /app/stt-backend/
 /app/img-backend/
+
+# Model TTS runtime (manifest Kokoro + voice Piper .onnx)
+/app/tts-models/
 
 # Bobot model — bisa puluhan GB
 /app/models/
