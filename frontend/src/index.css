@@ -166,3 +166,17 @@
     background-clip: content-box;
   }
 }
+
+/* Kotak jawaban \boxed{} dari model reasoning (Qwen3, DeepSeek-R1, dll).
+   Default KaTeX-nya tipis & kecil sehingga sisi vertikalnya tampak seperti
+   garis "|" nyasar. Dibuat jelas: border aksen, sudut membulat, sedikit ruang
+   — jadi terbaca sebagai "kotak jawaban", bukan garis. (unlayered → menang
+   atas aturan .fbox bawaan katex.min.css yang diimpor lebih dulu.) */
+.katex .fbox {
+  border-color: var(--panel-chat);
+  border-width: 0.09em !important; /* paksa: inline-style KaTeX menahan width */
+  border-radius: 6px;
+}
+.katex .boxpad {
+  padding: 0.14em 0.45em;
+}

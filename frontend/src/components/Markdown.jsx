@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import { Copy, Check } from "lucide-react";
 
@@ -47,10 +49,13 @@ const COMPONENTS = {
 
 // Markdown merender teks respons AI (kode, bold, italic, list, tabel, dll).
 // react-markdown tidak merender HTML mentah secara default → aman dari XSS.
+// Catatan: model reasoning (Qwen3, DeepSeek-R1, dll) membungkus jawaban akhir
+// dalam \boxed{...} — dibiarkan sebagai kotak (konvensi umum), hanya di-style
+// agar jelas & rapi lewat CSS (.katex .fbox di index.css).
 export default function Markdown({ children }) {
   return (
     <div className="prose prose-sm prose-invert max-w-none prose-headings:font-display prose-headings:tracking-tight prose-p:leading-relaxed prose-a:text-panel-chat prose-a:font-medium prose-code:rounded prose-code:bg-panel-image/12 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:text-panel-image prose-code:before:content-none prose-code:after:content-none prose-strong:text-foreground">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={COMPONENTS}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]} components={COMPONENTS}>
         {children || ""}
       </ReactMarkdown>
     </div>

@@ -4,6 +4,7 @@ import '@fontsource-variable/inter'
 import '@fontsource-variable/jetbrains-mono'
 import '@fontsource-variable/bricolage-grotesque'
 import 'highlight.js/styles/github-dark.css'
+import 'katex/dist/katex.min.css'
 import './index.css'
 import App from './App.jsx'
 
