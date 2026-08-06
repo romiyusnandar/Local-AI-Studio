@@ -47,6 +47,26 @@ const COMPONENTS = {
   ),
 };
 
+// remark-math hanya mengenali delimiter $...$ dan $$...$$, sedangkan banyak
+// model (Qwen3, DeepSeek-R1, GPT, dll) mengeluarkan LaTeX dengan delimiter
+// \( ... \) (inline) dan \[ ... \] (display). normalizeMath mengubahnya ke
+// bentuk dolar agar ikut ter-render KaTeX. Isi code fence (```) dan inline
+// code (`...`) dilewati supaya contoh LaTeX di dalam kode tetap literal.
+function normalizeMath(input) {
+  if (!input || (!input.includes("\\(") && !input.includes("\\["))) return input;
+  // Pecah teks jadi segmen kode vs non-kode. Regex menangkap blok ```...```
+  // maupun inline `...`; hanya segmen non-kode yang ditransformasi.
+  const parts = input.split(/(```[\s\S]*?```|`[^`]*`)/g);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // segmen kode → biarkan apa adanya
+      return part
+        .replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`)
+        .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`);
+    })
+    .join("");
+}
+
 // Markdown merender teks respons AI (kode, bold, italic, list, tabel, dll).
 // react-markdown tidak merender HTML mentah secara default → aman dari XSS.
 // Catatan: model reasoning (Qwen3, DeepSeek-R1, dll) membungkus jawaban akhir
@@ -56,7 +76,7 @@ export default function Markdown({ children }) {
   return (
     <div className="prose prose-sm prose-invert max-w-none prose-headings:font-display prose-headings:tracking-tight prose-p:leading-relaxed prose-a:text-panel-chat prose-a:font-medium prose-code:rounded prose-code:bg-panel-image/12 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:text-panel-image prose-code:before:content-none prose-code:after:content-none prose-strong:text-foreground">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]} components={COMPONENTS}>
-        {children || ""}
+        {normalizeMath(children || "")}
       </ReactMarkdown>
     </div>
   );
