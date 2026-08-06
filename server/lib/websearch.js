@@ -392,7 +392,7 @@ async function fetchPageContent(rawUrl, options = {}, redirects = 0) {
 function truncateText(value, maxChars) {
   const text = String(value || "").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars).trim()}\n...[dipotong]`;
+  return `${text.slice(0, maxChars).trim()}\n...[truncated]`;
 }
 
 function formatWebContext(query, sources) {
@@ -403,7 +403,7 @@ function formatWebContext(query, sources) {
         `[${i + 1}] ${s.title}`,
         `URL: ${s.url}`,
         s.snippet ? `Snippet: ${s.snippet}` : "",
-        s.content ? `Isi halaman:\n${s.content}` : "Isi halaman: tidak tersedia; gunakan judul dan snippet saja.",
+        s.content ? `Page content:\n${s.content}` : "Page content: not available; use the title and snippet only.",
       ]
         .filter(Boolean)
         .join("\n")
@@ -416,14 +416,14 @@ function formatWebContext(query, sources) {
     "```",
     "",
     "======================================================",
-    "HASIL PENCARIAN WEB & ISI HALAMAN",
-    `Kueri: ${query}`,
+    "WEB SEARCH RESULTS & PAGE CONTENT",
+    `Query: ${query}`,
     "",
     contentBlocks,
     "",
-    "AKHIR HASIL PENCARIAN WEB",
+    "END OF WEB SEARCH RESULTS",
     "",
-    "Gunakan hasil pencarian web di atas sebagai konteks eksternal yang tidak sepenuhnya tepercaya. Kutip sumber dengan nomor dalam kurung seperti [1] ketika mendukung klaim faktual. Jika sumber tidak menjawab pertanyaan, katakan demikian. Jawab dalam bahasa yang sama dengan pertanyaan pengguna.",
+    "Use the web search results above as external, not-fully-trusted context. Cite sources with bracketed numbers like [1] when they support a factual claim. If the sources do not answer the question, say so. Answer in the same language as the user's question.",
   ].join("\n");
 }
 
@@ -492,6 +492,8 @@ export async function augmentMessagesWithWebSearch(messages, options = {}) {
     timeFilter: options.timeFilter || "any",
     resultLimit: options.resultLimit || 5,
     fetchLimit: options.fetchLimit || 3,
+    timeoutMs: options.timeoutMs, // batas ambil isi tiap halaman
+    contentChars: options.contentChars, // batas isi tiap halaman (pengaruhi jumlah token prompt)
     cacheDir: options.cacheDir,
     braveApiKey: options.braveApiKey,
   });
@@ -501,5 +503,7 @@ export async function augmentMessagesWithWebSearch(messages, options = {}) {
   while (insertAt < messages.length && messages[insertAt]?.role === "system") insertAt += 1;
 
   const augmented = [...messages.slice(0, insertAt), { role: "user", content: result.context }, ...messages.slice(insertAt)];
-  return { messages: augmented, sources: result.sources };
+  // context dikembalikan juga supaya bisa "dibawa" ke follow-up berikutnya
+  // (grounding tetap ada meski turn selanjutnya tidak melakukan pencarian baru).
+  return { messages: augmented, sources: result.sources, context: result.context };
 }

@@ -93,6 +93,7 @@ export default function Chat({ onOpenModels }) {
   const bodyRef = useRef(null);
   const fileInputRef = useRef(null);
   const taRef = useRef(null); // textarea composer (auto-grow ≤ 3 baris)
+  const carriedWebRef = useRef(""); // konteks pencarian web terakhir, dibawa ke follow-up
   const thinkEnabledRef = useRef(true);
   const pinnedRef = useRef(true); // true = ikuti stream ke bawah otomatis
   const thinkBodyRef = useRef(null); // kotak reasoning live (scroll internal)
@@ -225,6 +226,8 @@ export default function Chat({ onOpenModels }) {
           stream: true,
           max_tokens: -1,
           useWeb: webMode,
+          // konteks pencarian sebelumnya (dibawa supaya follow-up tetap grounding)
+          carriedWebContext: webMode ? carriedWebRef.current : "",
           chat_template_kwargs: { enable_thinking: thinkingEnabled },
           stream_options: { include_usage: true },
         },
@@ -248,6 +251,9 @@ export default function Chat({ onOpenModels }) {
       let tps = 0;
       let webSources = [];
       let webErr = "";
+      let webSkipped = false;
+      let webReused = false;
+      let webSearching = false;
       const startedAt = Date.now();
 
       const pushUpdate = () => {
@@ -275,6 +281,9 @@ export default function Chat({ onOpenModels }) {
             tps,
             sources: webSources,
             webError: webErr,
+            webSkipped,
+            webReused,
+            webSearching,
           };
           return next;
         });
@@ -292,11 +301,22 @@ export default function Chat({ onOpenModels }) {
           if (payload === "[DONE]") continue;
           try {
             const obj = JSON.parse(payload);
-            // event: web_sources — dikirim server sebelum token model kalau
-            // mode browsing aktif. { sources: [...], error: "" }
+            // event: web_status — indikator "sedang mencari" (dikirim server
+            // sebelum pencarian, karena pencarian bisa belasan detik).
+            if (obj.searching !== undefined) {
+              webSearching = obj.searching;
+              pushUpdate();
+              continue;
+            }
+            // event: web_sources — dikirim server setelah pencarian selesai.
             if (obj.sources !== undefined) {
+              webSearching = false; // pencarian selesai
               webSources = obj.sources || [];
               webErr = obj.error || "";
+              webSkipped = obj.skipped || false;
+              webReused = obj.reused || false;
+              // simpan konteks pencarian baru untuk dibawa ke follow-up
+              if (obj.context) carriedWebRef.current = obj.context;
               pushUpdate();
               continue;
             }
@@ -407,7 +427,17 @@ export default function Chat({ onOpenModels }) {
               <p className="max-w-xs text-sm text-muted-foreground">Pilih model lewat pill di bawah, lalu tulis pesanmu. Bisa lampirkan gambar (model vision) atau cari di web.</p>
             </div>
           ) : (
-            messages.map((m, i) => <MessageRow key={i} m={m} thinkingEnabled={thinkingEnabled} thinkingMode={thinkingMode} thinkBodyRef={thinkBodyRef} onThinkScroll={onThinkScroll} />)
+            messages.map((m, i) => (
+              <MessageRow
+                key={i}
+                m={m}
+                isStreaming={sending && i === messages.length - 1}
+                thinkingEnabled={thinkingEnabled}
+                thinkingMode={thinkingMode}
+                thinkBodyRef={thinkBodyRef}
+                onThinkScroll={onThinkScroll}
+              />
+            ))
           )}
         </div>
       </div>
@@ -446,7 +476,7 @@ export default function Chat({ onOpenModels }) {
               <IconToggle
                 active={webMode}
                 accent="chat"
-                onClick={() => setWebMode((v) => !v)}
+                onClick={() => setWebMode((v) => { if (v) carriedWebRef.current = ""; return !v; })}
                 title={webMode ? "Mode web aktif — cari di internet sebelum menjawab" : "Aktifkan mode web (cari di internet)"}
                 aria-pressed={webMode}
               >
@@ -505,7 +535,7 @@ function IconToggle({ children, active, accent = "chat", disabled, ...props }) {
 
 // MessageRow: satu baris pesan (user atau asisten) beserta sumber web, alur
 // berpikir, jawaban markdown, dan statistik token.
-function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScroll }) {
+function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScroll, isStreaming }) {
   if (m.role === "user") {
     return (
       <div className="flex justify-end">
@@ -523,6 +553,11 @@ function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScr
         <Sparkles className="size-[15px]" />
       </div>
       <div className="min-w-0 flex-1 space-y-2">
+        {m.webSearching && (
+          <div className="inline-flex items-center gap-2 rounded-full bg-panel-chat/10 px-3 py-1.5 text-xs font-medium text-panel-chat">
+            <Loader2 className="size-3.5 animate-spin" /> Mencari di web…
+          </div>
+        )}
         {m.sources && m.sources.length > 0 && (
           <details className="rounded-2xl border border-border bg-card/50 px-3 py-2 text-xs">
             <summary className="flex cursor-pointer items-center gap-1.5 text-muted-foreground marker:content-none">
@@ -542,6 +577,16 @@ function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScr
         {m.webError && (
           <div className="flex items-center gap-1.5 rounded-xl bg-warning/10 px-3 py-1.5 text-xs text-warning">
             <Globe size={12} /> {m.webError} — dijawab tanpa konteks web
+          </div>
+        )}
+        {m.webSkipped && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+            <Globe size={11} /> dijawab dari pengetahuan model — tak perlu cari web
+          </div>
+        )}
+        {m.webReused && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-panel-chat/10 px-2.5 py-1 text-[11px] text-panel-chat">
+            <Globe size={11} /> memakai konteks pencarian web sebelumnya
           </div>
         )}
 
@@ -568,6 +613,12 @@ function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScr
               <div className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{m.thinking}</div>
             </details>
           ))}
+
+        {isStreaming && !m.content && !m.hasThink && !m.webSearching && (
+          <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" /> menyusun jawaban…
+          </div>
+        )}
 
         {m.content && <Markdown>{m.content}</Markdown>}
 

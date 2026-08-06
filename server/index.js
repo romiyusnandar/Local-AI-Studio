@@ -102,6 +102,78 @@ function serveOutput(pathname, res) {
   });
 }
 
+// Sinyal (ID + EN) bahwa pertanyaan butuh info WEB TERKINI/real-time. Deteksi
+// berbasis kata kunci ini DETERMINISTIK & instan — dipilih daripada menyerahkan
+// keputusan ke model, yang tidak konsisten antar model & fraseologi (model
+// beda condong ke jawaban beda). Mudah diperluas kalau ada kasus yang terlewat.
+const WEB_SIGNALS = [
+  // waktu / kekinian informasi
+  "hari ini", "sekarang", "saat ini", "terkini", "terbaru", "kemarin", "minggu ini", "bulan ini", "tahun ini", "belakangan ini", "real-time", "realtime", "live",
+  "today", "right now", "currently", "current", "latest", "recent", "up to date", "up-to-date", "as of", "this week", "this month", "this year", "nowadays",
+  // finansial
+  "harga", "kurs", "nilai tukar", "dolar", "dollar", "rupiah", "usd", "idr", "saham", "stock", "crypto", "bitcoin", "ethereum", "price", "exchange rate", "inflasi", "inflation",
+  // cuaca
+  "cuaca", "weather", "suhu udara", "forecast", "ramalan cuaca",
+  // berita / peristiwa
+  "berita", "news", "kabar terbaru", "headline", "peristiwa terbaru", "breaking",
+  // olahraga
+  "skor", "score", "hasil pertandingan", "klasemen", "standings", "match result",
+  // jadwal / waktu spesifik
+  "jadwal", "schedule", "jam berapa", "what time", "kapan rilis", "release date",
+
+  // --- Spanyol ---
+  "hoy", "ahora", "actualmente", "ultimo", "ultima", "ultimos", "ultimas", "reciente", "en tiempo real", "en vivo", "hoy en dia",
+  "precio", "tipo de cambio", "dolar", "euro", "clima", "pronostico", "noticias", "ultimas noticias", "resultado del partido", "cuando sale", "fecha de lanzamiento",
+  // --- Portugis ---
+  "hoje", "agora", "atualmente", "recente", "em tempo real", "ao vivo", "hoje em dia",
+  "preco", "taxa de cambio", "cotacao", "acoes", "clima", "previsao do tempo", "noticias", "ultimas noticias", "resultado", "quando lanca", "data de lancamento",
+  // --- Prancis ---
+  "aujourd'hui", "maintenant", "actuellement", "actuel", "actuelle", "dernier", "derniere", "recent", "en temps reel", "en direct",
+  "prix", "taux de change", "dollar", "meteo", "previsions", "actualites", "dernieres nouvelles", "resultat du match", "quand sort", "date de sortie",
+  // --- Jerman --- (aksen dinormalisasi: ü→u, ö→o; sertakan juga bentuk ue/oe)
+  "heute", "jetzt", "aktuell", "aktuelle", "neueste", "kurzlich", "kuerzlich", "in echtzeit", "heutzutage",
+  "preis", "wechselkurs", "wetter", "wettervorhersage", "vorhersage", "nachrichten", "neuigkeiten", "spielstand", "wann erscheint",
+  // --- Italia ---
+  "oggi", "adesso", "attualmente", "attuale", "recente", "in tempo reale", "in diretta", "al giorno d'oggi",
+  "prezzo", "tasso di cambio", "dollaro", "meteo", "previsioni", "notizie", "ultime notizie", "risultato", "quando esce", "data di uscita",
+];
+const RECENT_YEAR = /\b20(2[3-9]|3\d)\b/; // tahun 2023-2039 = kemungkinan butuh info terkini
+
+// stripAccents membuang diakritik (é→e, ñ→n, ç→c, ü→u, ã→a) supaya word-boundary
+// \b tetap jalan di kata beraksen (mis. "último" yang diawali huruf non-ASCII
+// membuat \b gagal) dan supaya cocok meski pengguna mengetik tanpa aksen.
+const stripAccents = (s) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+// Cocokkan sinyal sebagai KATA UTUH (word boundary), bukan substring — supaya
+// "kurs" tidak keliru cocok di dalam "rekursi", "harga" di "berharga", dst.
+// Semua sinyal & query dinormalisasi (buang aksen) dulu.
+const WEB_SIGNAL_RE = new RegExp(
+  "\\b(" + WEB_SIGNALS.map((s) => stripAccents(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b",
+  "i"
+);
+
+// decideNeedsWeb: TRUE hanya kalau pertanyaan terakhir mengandung sinyal butuh
+// info terkini. Selain itu FALSE (jawab dari pengetahuan model). Ini menghindari
+// pencarian berlebihan untuk hal yang model sudah tahu (kode, konsep, dll).
+function decideNeedsWeb(messages) {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  let q = "";
+  if (typeof lastUser?.content === "string") q = lastUser.content;
+  else if (Array.isArray(lastUser?.content)) q = lastUser.content.filter((p) => p.type === "text").map((p) => p.text).join(" ");
+  if (!q.trim()) return false;
+  const norm = stripAccents(q); // buang aksen supaya cocok dgn sinyal Latin & \b jalan
+  return RECENT_YEAR.test(norm) || WEB_SIGNAL_RE.test(norm);
+}
+
+// injectWebContext menyisipkan teks konteks web sebagai pesan (setelah pesan
+// system, sebelum percakapan) — sama seperti augmentMessagesWithWebSearch,
+// dipakai untuk MEMBAWA konteks pencarian sebelumnya ke follow-up.
+function injectWebContext(messages, contextText) {
+  let insertAt = 0;
+  while (insertAt < messages.length && messages[insertAt]?.role === "system") insertAt += 1;
+  return [...messages.slice(0, insertAt), { role: "user", content: contextText }, ...messages.slice(insertAt)];
+}
+
 // ---------- handler LLM (chat: proxy SSE, bukan pola model-manager biasa) ----------
 
 // handleChat mem-proxy stream SSE dari llama-server ke browser. Penting:
@@ -128,23 +200,59 @@ async function handleChat(req, res) {
     const raw = [];
     for await (const chunk of req) raw.push(chunk);
     const body = JSON.parse(Buffer.concat(raw).toString("utf8") || "{}");
+    const streaming = body.stream !== false;
+
+    // openSSE membuka respons sebagai event-stream (sekali). Dipanggil lebih
+    // awal saat akan mencari, supaya bisa mengirim indikator "sedang mencari".
+    const openSSE = () => {
+      if (res.headersSent) return;
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
+    };
+
+    // Tentukan lebih dulu apakah akan mencari, supaya UI bisa diberi indikator
+    // "Mencari di web…" SELAMA pencarian (yang bisa belasan detik) — bukan layar
+    // kosong seperti sebelumnya.
+    const willSearch = body.useWeb === true && decideNeedsWeb(body.messages);
+    if (streaming && willSearch) {
+      openSSE();
+      res.write(`event: web_status\ndata: ${JSON.stringify({ searching: true })}\n\n`);
+    }
 
     // Mode browsing: cari di web, suntik hasilnya sebagai konteks. Kegagalan
-    // pencarian (diblokir/timeout/rate-limit) TIDAK menggagalkan chat — kita
-    // lanjut tanpa konteks web dan memberi tahu UI lewat webError.
+    // pencarian (diblokir/timeout/rate-limit) TIDAK menggagalkan chat.
     let webSources = [];
     let webError = "";
+    let webSkipped = false;
+    let webReused = false;
+    let webContext = ""; // konteks yang dipakai turn ini — dikirim balik ke UI untuk dibawa
+    const carried = typeof body.carriedWebContext === "string" ? body.carriedWebContext.trim() : "";
     if (body.useWeb) {
-      try {
-        const aug = await augmentMessagesWithWebSearch(body.messages, {
-          cacheDir: SEARCH_CACHE_DIR,
-          braveApiKey: settings.get("braveApiKey"),
-        });
-        body.messages = aug.messages;
-        webSources = aug.sources;
-        if (!webSources.length) webError = "tidak ada hasil pencarian web";
-      } catch (err) {
-        webError = `pencarian web gagal: ${err.message}`;
+      if (willSearch) {
+        // Pencarian baru — hasilnya menggantikan konteks yang dibawa. fetchLimit
+        // & timeoutMs dibatasi supaya tak terlalu lama menunggu halaman lambat.
+        try {
+          const aug = await augmentMessagesWithWebSearch(body.messages, {
+            cacheDir: SEARCH_CACHE_DIR,
+            braveApiKey: settings.get("braveApiKey"),
+            fetchLimit: 2, // ambil isi 2 halaman teratas saja
+            timeoutMs: 8000, // jangan tunggu halaman lambat terlalu lama
+            contentChars: 1500, // batasi isi tiap halaman → prompt lebih pendek → model lebih cepat
+          });
+          body.messages = aug.messages;
+          webSources = aug.sources;
+          webContext = aug.context || "";
+          if (!webSources.length) webError = "tidak ada hasil pencarian web";
+        } catch (err) {
+          webError = `pencarian web gagal: ${err.message}`;
+        }
+      } else if (carried) {
+        // Tidak perlu cari lagi, tapi ada konteks web dari pencarian sebelumnya
+        // → bawa (inject) supaya follow-up tetap ter-grounding.
+        body.messages = injectWebContext(body.messages, carried);
+        webContext = carried;
+        webReused = true;
+      } else {
+        webSkipped = true;
       }
     }
 
@@ -152,6 +260,7 @@ async function handleChat(req, res) {
     // mengerti field OpenAI standar).
     delete body.useWeb;
     delete body.webQuery;
+    delete body.carriedWebContext;
 
     const upstream = await fetch(`http://127.0.0.1:${llm.getPort()}/v1/chat/completions`, {
       method: "POST",
@@ -162,18 +271,24 @@ async function handleChat(req, res) {
 
     if (!upstream.ok || !upstream.body) {
       finished = true;
+      if (res.headersSent) {
+        // Stream sudah terbuka (indikator mencari terlanjur terkirim) — sampaikan
+        // error sebagai konten supaya bubble asisten menampilkannya, bukan kosong.
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "(mesin AI tidak merespons)" } }] })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
       return sendJson(res, 502, { error: "mesin AI tidak merespons" });
     }
 
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no",
-    });
-    // Kirim sumber web (atau info kegagalannya) sebagai event SSE pertama,
-    // sebelum token model, supaya UI bisa menampilkannya lebih dulu.
-    if (body.stream !== false && (webSources.length || webError)) {
-      res.write(`event: web_sources\ndata: ${JSON.stringify({ sources: webSources, error: webError })}\n\n`);
+    if (streaming) openSSE(); // pastikan head terbuka (kasus reuse/skip yang belum buka)
+
+    // Kirim sumber web (atau info kegagalan/skip/reuse) sebelum token model.
+    if (streaming && (webSources.length || webError || webSkipped || webReused)) {
+      const payload = { sources: webSources, error: webError, skipped: webSkipped, reused: webReused };
+      if (webSources.length && webContext) payload.context = webContext;
+      res.write(`event: web_sources\ndata: ${JSON.stringify(payload)}\n\n`);
     }
     for await (const chunk of upstream.body) {
       res.write(chunk);
