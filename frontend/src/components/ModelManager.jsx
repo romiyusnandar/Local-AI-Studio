@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Download, Trash2, Check, Eye, Loader2, HardDrive, X } from "lucide-react";
 import { Api } from "../services/api.js";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,12 @@ function formatBytes(n) {
 }
 
 export default function ModelManager() {
-  const [kind, setKind] = useState("llm");
+  // Tab aktif diambil dari ?kind= di URL supaya tiap panel bisa membuka tab
+  // mesinnya sendiri (mis. /models?kind=img) dan URL-nya bisa di-bookmark.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramKind = searchParams.get("kind");
+  const kind = KINDS.some((k) => k.id === paramKind) ? paramKind : "llm";
+  const setKind = (k) => setSearchParams({ kind: k });
   const [installed, setInstalled] = useState({ models: [], active: "" });
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);

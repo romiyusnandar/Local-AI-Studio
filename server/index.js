@@ -55,6 +55,21 @@ function serveStatic(req, res) {
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
+      // SPA fallback: rute klien React Router (mis. /chat, /image) tidak punya
+      // file fisik. Kalau path tak berekstensi (bukan aset seperti .js/.png),
+      // kembalikan index.html supaya buka/refresh langsung ke rute itu jalan.
+      if (!path.extname(reqPath)) {
+        fs.readFile(path.join(distDir, "index.html"), (e2, html) => {
+          if (e2) {
+            res.writeHead(404, { "Content-Type": "text/plain" });
+            res.end("Not found");
+            return;
+          }
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(html);
+        });
+        return;
+      }
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
       return;
