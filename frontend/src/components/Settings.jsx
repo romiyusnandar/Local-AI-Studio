@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, Image as ImageIcon, Key, Check, Trash2, ExternalLink } from "lucide-react";
 import { Api } from "../services/api.js";
-import "./Settings.css";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 export default function Settings() {
   const [settings, setSettings] = useState(null);
@@ -104,184 +105,188 @@ export default function Settings() {
   }
 
   return (
-    <div className="settings-panel">
-      <div className="panel-head">
+    <div className="flex h-full flex-col">
+      <header className="flex flex-none items-center justify-between gap-3 border-b border-border px-5 py-3">
         <div>
-          <h1>Pengaturan</h1>
-          <div className="status-line">
-            <span>Setelan tiap mesin — berlaku langsung, tersimpan otomatis</span>
-          </div>
+          <h1 className="text-lg font-semibold leading-tight">Pengaturan</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">Setelan tiap mesin — berlaku langsung, tersimpan otomatis.</p>
         </div>
         {savedFlash && (
-          <span className="settings-saved">
+          <span className="flex flex-none items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success">
             <Check size={14} /> Tersimpan
           </span>
         )}
-      </div>
+      </header>
 
-      <div className="settings-body">
-        {!settings ? (
-          <div className="settings-loading">Memuat pengaturan&hellip;</div>
-        ) : (
-          <>
-            {/* ---- Chat ---- */}
-            <section className="settings-section">
-              <div className="settings-section-title">
-                <MessageSquare size={15} />
-                <span>Chat</span>
-              </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-2xl space-y-5 px-4 py-5">
+          {!settings ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">Memuat pengaturan…</div>
+          ) : (
+            <>
+              {/* ---- Chat ---- */}
+              <section className="space-y-6 rounded-3xl border border-border bg-card p-5">
+                <SectionTitle icon={MessageSquare} color="text-panel-chat">Chat</SectionTitle>
 
-              <div className="settings-field">
-                <label className="label">Brave Search API Key</label>
-                <p className="settings-help">
-                  Opsional. Kalau diisi, mode web di Chat memakai API resmi Brave — jauh lebih andal (tanpa risiko rate-limit).
-                  Tanpa key, pencarian tetap jalan lewat scraping. Key gratis 2.000 kueri/bulan.{" "}
-                  <a href="https://api-dashboard.search.brave.com/register" target="_blank" rel="noreferrer">
-                    Dapatkan key <ExternalLink size={11} />
-                  </a>
-                </p>
+                <Field label="Brave Search API Key">
+                  <Help>
+                    Opsional — bikin mode web lebih andal. Tanpa key tetap jalan (scraping).{" "}
+                    <a href="https://api-dashboard.search.brave.com/register" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-panel-chat hover:underline">
+                      Dapatkan key <ExternalLink size={11} />
+                    </a>
+                  </Help>
+                  {settings.braveApiKeySet ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-xs font-medium text-success">
+                        <Key size={13} /> Key tersimpan
+                      </span>
+                      <button onClick={deleteKey} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 size={13} /> Hapus
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder="Tempel Brave API key di sini…"
+                        value={keyInput}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && saveKey()}
+                        className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-panel-chat/60"
+                      />
+                      <button onClick={saveKey} disabled={savingKey || !keyInput.trim()} className="flex-none rounded-xl bg-panel-chat px-4 py-2 text-sm font-semibold text-white transition enabled:hover:brightness-110 disabled:opacity-50">
+                        {savingKey ? "Menyimpan…" : "Simpan"}
+                      </button>
+                    </div>
+                  )}
+                </Field>
 
-                {settings.braveApiKeySet ? (
-                  <div className="key-status">
-                    <span className="key-status-badge">
-                      <Key size={13} /> Key tersimpan
-                    </span>
-                    <button className="btn-sm btn-danger" onClick={deleteKey}>
-                      <Trash2 size={14} />
-                      <span>Hapus</span>
-                    </button>
+                <Field label="Mode berpikir model">
+                  <Help>Untuk model reasoning — berpikir dulu, atau langsung menjawab.</Help>
+                  <div className="flex items-center gap-3">
+                    <Switch checked={settings.thinkingEnabled} onCheckedChange={(v) => patchSettings({ thinkingEnabled: v })} />
+                    <span className="font-mono text-xs text-muted-foreground">{settings.thinkingEnabled ? "Aktif" : "Nonaktif"}</span>
                   </div>
-                ) : (
-                  <div className="key-input-row">
-                    <input
-                      type="password"
-                      placeholder="Tempel Brave API key di sini…"
-                      value={keyInput}
-                      onChange={(e) => setKeyInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && saveKey()}
+                </Field>
+
+                {settings.thinkingEnabled && (
+                  <Field label="Tampilan alur berpikir">
+                    <Help>Tampilkan alur berpikirnya, atau cukup indikator "berpikir…".</Help>
+                    <Select value={settings.thinkingMode} onChange={(e) => patchSettings({ thinkingMode: e.target.value })} accent="chat">
+                      <option value="show">Tampilkan alur berpikir</option>
+                      <option value="hide">Sembunyikan (hanya "berpikir…")</option>
+                    </Select>
+                  </Field>
+                )}
+
+                <Field label="Context window (n_ctx)">
+                  <Help>Token maks per percakapan. Lebih besar = butuh RAM/VRAM lebih. Mengubah model aktif me-restart mesin.</Help>
+
+                  <CtxRow>
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">Default (semua model)</span>
+                    <CtxInput
+                      value={ctxDraft.__default ?? ""}
+                      onChange={(e) => setDraft("__default", e.target.value)}
+                      onBlur={commitDefaultCtx}
+                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                     />
-                    <button className="btn-primary" onClick={saveKey} disabled={savingKey || !keyInput.trim()}>
-                      <span>{savingKey ? "Menyimpan…" : "Simpan"}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                    <span className="w-9 flex-none font-mono text-[11px] text-muted-foreground">token</span>
+                  </CtxRow>
 
-              <div className="settings-field">
-                <label className="label">Mode berpikir model</label>
-                <p className="settings-help">
-                  Untuk model reasoning (mis. Qwen3, DeepSeek-R1). <b>Aktif</b>: model diminta berpikir dulu sebelum
-                  menjawab. <b>Nonaktif</b>: model diminta langsung menjawab tanpa berpikir.
-                </p>
-                <div className="toggle-row">
-                  <button
-                    type="button"
-                    className={`toggle${settings.thinkingEnabled ? " on" : ""}`}
-                    onClick={() => patchSettings({ thinkingEnabled: !settings.thinkingEnabled })}
-                    aria-pressed={settings.thinkingEnabled}
-                  >
-                    <span className="toggle-knob" />
-                  </button>
-                  <span className="toggle-label">{settings.thinkingEnabled ? "Aktif" : "Nonaktif"}</span>
-                </div>
-              </div>
+                  {chatModels.length > 0 && (
+                    <>
+                      <div className="pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Override per model</div>
+                      {chatModels.map((f) => (
+                        <CtxRow key={f}>
+                          <span className="flex min-w-0 flex-1 items-center gap-2 text-xs" title={f}>
+                            <span className="truncate">{f}</span>
+                            {f === activeModel && <span className="flex-none rounded-full bg-panel-chat/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-panel-chat">aktif</span>}
+                            {ctxLimits[f] > 0 && <span className="flex-none rounded-full border border-border px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">maks {ctxLimits[f].toLocaleString("id-ID")}</span>}
+                          </span>
+                          <CtxInput
+                            max={ctxLimits[f] || undefined}
+                            placeholder={`${settings.contextSizeDefault}`}
+                            value={ctxDraft[f] ?? ""}
+                            onChange={(e) => setDraft(f, e.target.value)}
+                            onBlur={() => commitModelCtx(f)}
+                            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                          />
+                          <span className="w-9 flex-none font-mono text-[11px] text-muted-foreground">token</span>
+                        </CtxRow>
+                      ))}
+                      <Help>Kosongkan = pakai default. Badge <b className="text-foreground">maks</b> = batas context model.</Help>
+                    </>
+                  )}
+                </Field>
+              </section>
 
-              {settings.thinkingEnabled && (
-                <div className="settings-field">
-                  <label className="label">Tampilan alur berpikir</label>
-                  <p className="settings-help">
-                    <b>Tampilkan</b>: alur berpikir muncul live + jumlah token, lalu tersimpan sebagai bagian yang bisa
-                    dibuka; jawaban final di bawahnya. <b>Sembunyikan</b>: hanya "berpikir…" + jumlah token, lalu jawaban
-                    final.
-                  </p>
-                  <select
-                    className="settings-select"
-                    value={settings.thinkingMode}
-                    onChange={(e) => patchSettings({ thinkingMode: e.target.value })}
-                  >
-                    <option value="show">Tampilkan alur berpikir</option>
-                    <option value="hide">Sembunyikan (hanya "berpikir…")</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="settings-field">
-                <label className="label">Context window (n_ctx)</label>
-                <p className="settings-help">
-                  Jumlah token maksimum yang muat dalam satu percakapan (prompt + riwayat + balasan). Model untuk coding
-                  butuh context besar (mis. 8192–32768). Makin besar makin banyak RAM/VRAM terpakai, dan dibatasi context
-                  maksimum yang dilatih model. Mengubah nilai model yang <b>sedang aktif</b> akan me-restart mesin sebentar.
-                </p>
-
-                <div className="ctx-row">
-                  <span className="ctx-label ctx-default">Default (semua model)</span>
-                  <input
-                    type="number"
-                    min={512}
-                    step={512}
-                    className="ctx-input"
-                    value={ctxDraft.__default ?? ""}
-                    onChange={(e) => setDraft("__default", e.target.value)}
-                    onBlur={commitDefaultCtx}
-                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                  />
-                  <span className="ctx-unit">token</span>
-                </div>
-
-                {chatModels.length > 0 && (
-                  <>
-                    <div className="ctx-subtitle">Override per model</div>
-                    {chatModels.map((f) => (
-                      <div className="ctx-row" key={f}>
-                        <span className="ctx-label" title={f}>
-                          {f}
-                          {f === activeModel && <span className="ctx-active">aktif</span>}
-                          {ctxLimits[f] > 0 && <span className="ctx-max">maks {ctxLimits[f].toLocaleString("id-ID")}</span>}
-                        </span>
-                        <input
-                          type="number"
-                          min={512}
-                          step={512}
-                          max={ctxLimits[f] || undefined}
-                          className="ctx-input"
-                          placeholder={`default ${settings.contextSizeDefault}`}
-                          value={ctxDraft[f] ?? ""}
-                          onChange={(e) => setDraft(f, e.target.value)}
-                          onBlur={() => commitModelCtx(f)}
-                          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                        />
-                        <span className="ctx-unit">token</span>
-                      </div>
-                    ))}
-                    <p className="settings-help">
-                      Kosongkan untuk memakai nilai default. Badge <b>maks</b> = context yang dilatih model itu; input
-                      tak bisa melebihinya.
-                    </p>
-                  </>
-                )}
-              </div>
-            </section>
-
-            {/* ---- Gambar ---- */}
-            <section className="settings-section">
-              <div className="settings-section-title">
-                <ImageIcon size={15} />
-                <span>Gambar</span>
-              </div>
-
-              <div className="settings-field">
-                <label className="label">Ukuran gambar default</label>
-                <p className="settings-help">Dipakai saat membuat gambar di panel Gambar.</p>
-                <select className="settings-select" value={settings.imageSize} onChange={(e) => changeImageSize(e.target.value)}>
-                  <option value="512x512">512 × 512</option>
-                  <option value="768x768">768 × 768</option>
-                  <option value="1024x1024">1024 × 1024</option>
-                </select>
-              </div>
-            </section>
-          </>
-        )}
+              {/* ---- Gambar ---- */}
+              <section className="space-y-6 rounded-3xl border border-border bg-card p-5">
+                <SectionTitle icon={ImageIcon} color="text-panel-image">Gambar</SectionTitle>
+                <Field label="Ukuran gambar default">
+                  <Help>Dipakai di panel Gambar.</Help>
+                  <Select value={settings.imageSize} onChange={(e) => changeImageSize(e.target.value)} accent="image">
+                    <option value="512x512">512 × 512</option>
+                    <option value="768x768">768 × 768</option>
+                    <option value="1024x1024">1024 × 1024</option>
+                  </Select>
+                </Field>
+              </section>
+            </>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function SectionTitle({ icon: Icon, color, children }) {
+  return (
+    <div className="flex items-center gap-2 text-sm font-semibold">
+      <Icon className={cn("size-4", color)} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="space-y-2.5">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Help({ children }) {
+  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
+}
+
+function Select({ accent = "chat", className, ...props }) {
+  return (
+    <select
+      {...props}
+      className={cn(
+        "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors sm:w-auto sm:min-w-[220px]",
+        accent === "image" ? "focus:border-panel-image/60" : "focus:border-panel-chat/60",
+        className,
+      )}
+    />
+  );
+}
+
+function CtxRow({ children }) {
+  return <div className="flex items-center gap-2.5">{children}</div>;
+}
+
+function CtxInput(props) {
+  return (
+    <input
+      type="number"
+      min={512}
+      step={512}
+      {...props}
+      className="w-28 flex-none rounded-xl border border-border bg-background px-3 py-1.5 text-right font-mono text-sm outline-none transition-colors focus:border-panel-chat/60"
+    />
   );
 }
