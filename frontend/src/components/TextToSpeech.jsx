@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2, Download } from "lucide-react";
+import { Volume2, Download, Boxes, Loader2 } from "lucide-react";
 import { Api } from "../services/api.js";
-import ModelChip from "./ModelChip.jsx";
-import "./TextToSpeech.css";
+import { cn } from "@/lib/utils";
 
 export default function TextToSpeech({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
@@ -68,55 +67,86 @@ export default function TextToSpeech({ onOpenModels }) {
   }
 
   return (
-    <div className="tts-panel">
-      <div className="panel-head">
-        <div>
-          <h1>Teks ke Suara</h1>
-          <div className="status-line">
-            <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
-            <span>{status.mesinHidup ? `siap — ${status.model}` : "pasang model di Model Manager"}</span>
+    <div className="flex h-full flex-col">
+      <header className="flex flex-none items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold leading-tight">Teks → Suara</h1>
+          <div className="mt-0.5 flex items-center gap-2 font-mono text-xs text-muted-foreground">
+            <span className={cn("size-2 flex-none rounded-full", status.mesinHidup ? "bg-panel-tts shadow-[0_0_8px_var(--panel-tts)]" : "bg-muted-foreground/40")} />
+            <span className="truncate">{status.mesinHidup ? `siap — ${status.model}` : "mesin TTS mati — pasang model di Model Manager"}</span>
           </div>
         </div>
-        <div className="tts-header-right">
-          {voices.length > 0 ? (
-            <select value={voice} onChange={(e) => setVoice(e.target.value)}>
-              {voices.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="voice-single">Suara tunggal</span>
-          )}
-          <ModelChip model={status.model} onOpen={onOpenModels} />
-        </div>
-      </div>
-
-      <div className="tts-body">
-        <label className="label">Teks</label>
-        <textarea
-          rows={5}
-          placeholder="Tulis teks yang ingin diucapkan…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-
-        <button className="btn-primary" onClick={onSpeak} disabled={busy || !text.trim()}>
-          <Volume2 size={16} />
-          <span>{busy ? "Membuat suara…" : "Ucapkan"}</span>
+        <button
+          onClick={onOpenModels}
+          title="Kelola / ganti model di Model Manager"
+          className="flex flex-none items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          <Boxes size={13} />
+          <span className={cn("max-w-[9rem] truncate", !status.model && "text-panel-tts")}>{status.model || "Pilih model"}</span>
         </button>
+      </header>
 
-        {audioUrl && (
-          <div className="audio-result">
-            <audio controls autoPlay src={audioUrl} />
-            <a className="btn-sm" href={audioUrl} download="suara.wav">
-              <Download size={14} />
-              <span>Unduh</span>
-            </a>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
+          {/* ---- pilih suara ---- */}
+          <div className="space-y-2.5">
+            <Label>Suara</Label>
+            {voices.length > 0 ? (
+              <select
+                value={voice}
+                onChange={(e) => setVoice(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-panel-tts/60 sm:w-auto sm:min-w-[240px]"
+              >
+                {voices.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="inline-block rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">Suara tunggal (model ini tak punya pilihan suara)</span>
+            )}
           </div>
-        )}
+
+          {/* ---- teks ---- */}
+          <div className="space-y-2.5">
+            <Label>Teks</Label>
+            <textarea
+              rows={5}
+              placeholder="Tulis teks yang ingin diucapkan…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-panel-tts/60"
+            />
+          </div>
+
+          <button
+            onClick={onSpeak}
+            disabled={busy || !text.trim()}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-panel-tts to-panel-models py-2.5 text-sm font-semibold text-white shadow-lg shadow-panel-tts/25 transition enabled:hover:brightness-110 disabled:opacity-50 sm:w-auto sm:px-6"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Volume2 size={16} />}
+            <span>{busy ? "Membuat suara…" : "Ucapkan"}</span>
+          </button>
+
+          {audioUrl && (
+            <div className="space-y-3 rounded-3xl border border-panel-tts/30 bg-panel-tts/5 p-4">
+              <audio controls autoPlay src={audioUrl} className="w-full" />
+              <a
+                href={audioUrl}
+                download="suara.wav"
+                className="inline-flex items-center gap-1.5 rounded-full bg-panel-tts/15 px-3.5 py-1.5 text-xs font-semibold text-panel-tts transition hover:bg-panel-tts hover:text-white"
+              >
+                <Download size={13} /> Unduh
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function Label({ children }) {
+  return <label className="block font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{children}</label>;
 }
