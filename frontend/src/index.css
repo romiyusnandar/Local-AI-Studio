@@ -1,7 +1,168 @@
-* {
-  box-sizing: border-box;
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+/* Varian dark shadcn/ui: aktif saat ada ancestor .dark */
+@custom-variant dark (&:is(.dark *));
+
+/* =====================================================================
+   Local AI Studio — sistem desain "colorful & playful"
+   Basis indigo-plum, aksen vivid, sudut membulat chunky. Tiap panel/mesin
+   punya warna identitasnya sendiri (signature) — colorful sekaligus jadi
+   penanda navigasi. Default gelap; mode terang tersedia lewat class .light.
+   ===================================================================== */
+
+:root {
+  --radius: 1rem;
+
+  /* ---- Mode TERANG (dipakai saat <html class="light">) ---- */
+  --background: #f5f3fe;
+  --foreground: #1d1832;
+  --card: #ffffff;
+  --card-foreground: #1d1832;
+  --popover: #ffffff;
+  --popover-foreground: #1d1832;
+  --primary: #7c4dff;
+  --primary-foreground: #ffffff;
+  --secondary: #ffe6f2;
+  --secondary-foreground: #b3175f;
+  --muted: #efe9fc;
+  --muted-foreground: #6c6488;
+  --accent: #ece9ff;
+  --accent-foreground: #5b39d6;
+  --destructive: #ff4d5e;
+  --destructive-foreground: #ffffff;
+  --border: #e6def6;
+  --input: #e6def6;
+  --ring: #7c4dff;
+
+  /* Warna identitas per panel/mesin (signature colorful) */
+  --panel-chat: #8b5cff;
+  --panel-image: #ff4d9d;
+  --panel-speech: #ff8a3d;
+  --panel-tts: #12c2a0;
+  --panel-models: #3b82f6;
+  --panel-system: #56c945;
+  --panel-settings: #8b8aa7;
+
+  --success: #12c2a0;
+  --warning: #ff8a3d;
 }
 
-body {
-  margin: 0;
+/* ---- Mode GELAP (default aplikasi) ---- */
+.dark {
+  --background: #120f22;
+  --foreground: #ece9f8;
+  --card: #1b1733;
+  --card-foreground: #ece9f8;
+  --popover: #1b1733;
+  --popover-foreground: #ece9f8;
+  --primary: #9d7bff;
+  --primary-foreground: #160f2c;
+  --secondary: #2a2145;
+  --secondary-foreground: #f1ddff;
+  --muted: #221c3c;
+  --muted-foreground: #a49cc6;
+  --accent: #2c2350;
+  --accent-foreground: #dcccff;
+  --destructive: #ff5d6c;
+  --destructive-foreground: #ffffff;
+  --border: #2b2448;
+  --input: #352b57;
+  --ring: #9d7bff;
+
+  --panel-chat: #9d7bff;
+  --panel-image: #ff5ba7;
+  --panel-speech: #ff9a52;
+  --panel-tts: #22d3ac;
+  --panel-models: #5b9bff;
+  --panel-system: #74d94f;
+  --panel-settings: #a09fbf;
+
+  --success: #22d3ac;
+  --warning: #ff9a52;
+}
+
+/* Map token ke utilitas Tailwind (bg-background, text-foreground, dst.) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-panel-chat: var(--panel-chat);
+  --color-panel-image: var(--panel-image);
+  --color-panel-speech: var(--panel-speech);
+  --color-panel-tts: var(--panel-tts);
+  --color-panel-models: var(--panel-models);
+  --color-panel-system: var(--panel-system);
+  --color-panel-settings: var(--panel-settings);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", sans-serif;
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  /* Scrollbar playful yang tipis */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+    background-clip: content-box;
+  }
 }

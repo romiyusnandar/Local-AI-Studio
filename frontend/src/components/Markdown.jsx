@@ -5,7 +5,8 @@ import rehypeHighlight from "rehype-highlight";
 import { Copy, Check } from "lucide-react";
 
 // CodeBlock: blok kode dengan tombol salin. rehype-highlight sudah mewarnai
-// isi <code> di dalamnya, jadi di sini cukup membungkus + tombol salin.
+// isi <code> (tema github-dark diimpor di main.jsx), jadi di sini cukup
+// membungkus + tombol salin. not-prose supaya typography tidak ikut campur.
 function CodeBlock({ children }) {
   const ref = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -19,12 +20,18 @@ function CodeBlock({ children }) {
     }
   };
   return (
-    <div className="md-codeblock">
-      <button className="md-copy" onClick={copy} title="Salin kode">
-        {copied ? <Check size={13} /> : <Copy size={13} />}
+    <div className="not-prose group relative my-3 overflow-hidden rounded-2xl border border-border bg-[#0d1117]">
+      <button
+        onClick={copy}
+        title="Salin kode"
+        className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 font-mono text-[11px] text-muted-foreground opacity-0 transition hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
         <span>{copied ? "Tersalin" : "Salin"}</span>
       </button>
-      <pre ref={ref}>{children}</pre>
+      <pre ref={ref} className="overflow-x-auto p-4 text-[13px] leading-relaxed">
+        {children}
+      </pre>
     </div>
   );
 }
@@ -42,7 +49,7 @@ const COMPONENTS = {
 // react-markdown tidak merender HTML mentah secara default → aman dari XSS.
 export default function Markdown({ children }) {
   return (
-    <div className="md">
+    <div className="prose prose-sm prose-invert max-w-none prose-headings:font-display prose-headings:tracking-tight prose-p:leading-relaxed prose-a:text-panel-chat prose-a:font-medium prose-code:rounded prose-code:bg-panel-image/12 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:text-panel-image prose-code:before:content-none prose-code:after:content-none prose-strong:text-foreground">
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={COMPONENTS}>
         {children || ""}
       </ReactMarkdown>

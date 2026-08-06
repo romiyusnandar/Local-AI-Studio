@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Send, X, Square, Globe } from "lucide-react";
+import { Paperclip, ArrowUp, X, Square, Globe, Sparkles, Boxes, Copy, Check, Loader2 } from "lucide-react";
 import { Api } from "../services/api.js";
 import { engineStatusText } from "../lib/status.js";
-import ModelChip from "./ModelChip.jsx";
 import Markdown from "./Markdown.jsx";
-import "./Chat.css";
+import { cn } from "@/lib/utils";
 
 // resizeImageToDataUrl memperkecil gambar (sisi terpanjang ≤ maxDim) sebelum
 // dikirim ke model vision. Gambar besar diubah jadi ratusan/ribuan "token
@@ -56,6 +55,29 @@ function fmtDuration(s) {
   return `${m}m ${sec}s`;
 }
 
+// CopyButton: aksi salin untuk isi pesan asisten (muncul saat hover).
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // diabaikan
+        }
+      }}
+      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover:opacity-100"
+      title="Salin jawaban"
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+      <span>{copied ? "Tersalin" : "Salin"}</span>
+    </button>
+  );
+}
+
 export default function Chat({ onOpenModels }) {
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
   const [messages, setMessages] = useState([]);
@@ -70,6 +92,7 @@ export default function Chat({ onOpenModels }) {
   const abortRef = useRef(null);
   const bodyRef = useRef(null);
   const fileInputRef = useRef(null);
+  const taRef = useRef(null); // textarea composer (auto-grow ≤ 3 baris)
   const thinkEnabledRef = useRef(true);
   const pinnedRef = useRef(true); // true = ikuti stream ke bawah otomatis
   const thinkBodyRef = useRef(null); // kotak reasoning live (scroll internal)
@@ -119,6 +142,20 @@ export default function Chat({ onOpenModels }) {
   useEffect(() => {
     if (!status.multimodal && attachedImage) setAttachedImage(null);
   }, [status.multimodal]);
+
+  // Auto-grow textarea mengikuti isi, dibatasi 3 baris lalu baru scroll.
+  // Dihitung dari line-height + padding aktual supaya tahan beda font/zoom.
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || 20;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const max = lh * 3 + pad;
+    el.style.height = Math.min(el.scrollHeight, max) + "px";
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [input]);
 
   async function refreshStatus() {
     try {
@@ -333,157 +370,225 @@ export default function Chat({ onOpenModels }) {
     abortRef.current?.abort();
   }
 
+  const loading = status.load?.active;
+
   return (
-    <div className="chat-panel">
-      <div className="panel-head">
-        <div>
-          <h1>Chat</h1>
-          <div className="status-line">
-            <span className={`dot${status.mesinHidup ? " ready" : ""}`} />
-            <span>{engineStatusText(status, "chat")}</span>
+    <div className="flex h-full flex-col">
+      {/* ---- header ---- */}
+      <header className="flex flex-none items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold leading-tight">Chat</h1>
+          <div className="mt-0.5 flex items-center gap-2 font-mono text-xs text-muted-foreground">
+            <span className={cn("size-2 flex-none rounded-full", status.mesinHidup ? "bg-panel-chat shadow-[0_0_8px_var(--panel-chat)]" : "bg-muted-foreground/40")} />
+            <span className="truncate">{engineStatusText(status, "chat")}</span>
           </div>
-        </div>
-        <div className="chat-header-right">
-          {sessionTokens > 0 && <span className="token-total" title="Total token sesi ini">Σ {sessionTokens.toLocaleString()} token</span>}
-          <ModelChip model={status.model} onOpen={onOpenModels} />
-        </div>
-      </div>
-
-      <div className="chat-body" ref={bodyRef} onScroll={onBodyScroll}>
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <p>Belum ada percakapan. Pilih model lalu ajukan pertanyaan.</p>
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={`msg msg-${m.role}`}>
-            <div className="msg-role">{m.role === "user" ? "kamu" : "asisten"}</div>
-            {m.image && <img className="msg-image" src={m.image} alt="lampiran" />}
-            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
-              <details className="msg-sources">
-                <summary>
-                  <Globe size={12} /> {m.sources.length} sumber web
-                </summary>
-                <ol>
-                  {m.sources.map((s) => (
-                    <li key={s.index}>
-                      <a href={s.url} target="_blank" rel="noreferrer" title={s.url}>
-                        {s.title || s.url}
-                      </a>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            )}
-            {m.role === "assistant" && m.webError && (
-              <div className="msg-web-error">
-                <Globe size={12} /> {m.webError} — dijawab tanpa konteks web
-              </div>
-            )}
-
-            {/* Alur berpikir (model reasoning) — sesuai setelan di Pengaturan.
-                Mode berpikir OFF: jangan tampilkan alur; kalau model tetap
-                berpikir, cukup tunjukkan "memproses…" sampai jawaban muncul. */}
-            {m.role === "assistant" &&
-              m.hasThink &&
-              (!thinkingEnabled ? (
-                !m.thinkDone && (
-                  <div className="think-placeholder">
-                    <span className="think-dot" /> memproses…
-                  </div>
-                )
-              ) : thinkingMode === "hide" ? (
-                !m.thinkDone && (
-                  <div className="think-placeholder">
-                    <span className="think-dot" /> berpikir… · {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
-                  </div>
-                )
-              ) : !m.thinkDone ? (
-                <div className="think-live">
-                  <div className="think-head">
-                    <span className="think-dot" /> berpikir… · {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
-                  </div>
-                  <div className="think-body" ref={thinkBodyRef} onScroll={onThinkScroll}>
-                    {m.thinking}
-                  </div>
-                </div>
-              ) : (
-                <details className="think-collapsed">
-                  <summary>
-                    Berpikir selama {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
-                  </summary>
-                  <div className="think-body">{m.thinking}</div>
-                </details>
-              ))}
-
-            {(m.role !== "assistant" || m.content) && (
-              <div className="msg-bubble">
-                {m.role === "assistant" ? <Markdown>{m.content}</Markdown> : m.content}
-              </div>
-            )}
-
-            {m.role === "assistant" && m.content && m.tokens > 0 && (
-              <div className="msg-stats">
-                {m.tokens} token{m.total ? ` · ${m.total} total` : ""}
-                {m.tps > 0 ? ` · ${m.tps} tok/s` : ""}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <form className="composer" onSubmit={sendMessage}>
-        {attachedImage && (
-          <div className="attach-chip">
-            <img src={attachedImage} alt="" />
-            <span>gambar terlampir</span>
-            <button type="button" onClick={() => setAttachedImage(null)} aria-label="Hapus lampiran">
-              <X size={14} />
-            </button>
-          </div>
-        )}
-        <div className="composer-row">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => fileInputRef.current.click()}
-            disabled={!status.multimodal}
-            title={
-              status.multimodal
-                ? "Lampirkan gambar"
-                : "Model aktif tidak mendukung gambar — pasang & pilih model vision di Model Manager"
-            }
-          >
-            <Paperclip size={16} />
-          </button>
-          <button
-            type="button"
-            className={`icon-btn${webMode ? " web-on" : ""}`}
-            onClick={() => setWebMode((v) => !v)}
-            title={webMode ? "Mode web aktif — cari di internet sebelum menjawab" : "Aktifkan mode web (cari di internet)"}
-            aria-pressed={webMode}
-          >
-            <Globe size={16} />
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onAttachFile} />
-          <textarea
-            rows={1}
-            placeholder="Tulis pesan… (Enter untuk kirim, Shift+Enter baris baru)"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          {sending ? (
-            <button type="button" className="icon-btn stop" onClick={stopGeneration} title="Hentikan">
-              <Square size={14} />
-            </button>
-          ) : (
-            <button type="submit" className="icon-btn primary" title="Kirim">
-              <Send size={16} />
-            </button>
+          {loading && (
+            <div className="mt-2 h-1 w-56 max-w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-panel-chat transition-all duration-500" style={{ width: `${status.load.progress || 0}%` }} />
+            </div>
           )}
         </div>
-      </form>
+        {sessionTokens > 0 && (
+          <span className="flex-none rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title="Total token sesi ini">
+            Σ {sessionTokens.toLocaleString()}
+          </span>
+        )}
+      </header>
+
+      {/* ---- daftar pesan ---- */}
+      <div ref={bodyRef} onScroll={onBodyScroll} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 px-4 py-6">
+          {messages.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-xl shadow-panel-chat/30">
+                <Sparkles className="size-7" />
+              </div>
+              <h2 className="bg-gradient-to-r from-panel-chat to-panel-image bg-clip-text text-2xl font-bold text-transparent">Halo! Mau ngobrol apa?</h2>
+              <p className="max-w-xs text-sm text-muted-foreground">Pilih model lewat pill di bawah, lalu tulis pesanmu. Bisa lampirkan gambar (model vision) atau cari di web.</p>
+            </div>
+          ) : (
+            messages.map((m, i) => <MessageRow key={i} m={m} thinkingEnabled={thinkingEnabled} thinkingMode={thinkingMode} thinkBodyRef={thinkBodyRef} onThinkScroll={onThinkScroll} />)
+          )}
+        </div>
+      </div>
+
+      {/* ---- composer terpadu ---- */}
+      <div className="flex-none px-4 pb-4 pt-1">
+        <form onSubmit={sendMessage} className="mx-auto w-full max-w-3xl">
+          {attachedImage && (
+            <div className="mb-2 inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground">
+              <img src={attachedImage} alt="" className="size-8 rounded-lg object-cover" />
+              <span>gambar terlampir</span>
+              <button type="button" onClick={() => setAttachedImage(null)} aria-label="Hapus lampiran" className="rounded-md p-0.5 hover:bg-muted hover:text-foreground">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <div className="rounded-[1.75rem] border border-border bg-card p-2.5 shadow-sm transition-colors focus-within:border-panel-chat/60">
+            <textarea
+              ref={taRef}
+              rows={1}
+              placeholder="Tulis pesan… (Enter untuk kirim, Shift+Enter baris baru)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              className="w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            <div className="flex items-center gap-1.5">
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onAttachFile} />
+              <IconToggle
+                onClick={() => fileInputRef.current.click()}
+                disabled={!status.multimodal}
+                title={status.multimodal ? "Lampirkan gambar" : "Model aktif tidak mendukung gambar — pilih model vision di Model Manager"}
+              >
+                <Paperclip size={17} />
+              </IconToggle>
+              <IconToggle
+                active={webMode}
+                accent="chat"
+                onClick={() => setWebMode((v) => !v)}
+                title={webMode ? "Mode web aktif — cari di internet sebelum menjawab" : "Aktifkan mode web (cari di internet)"}
+                aria-pressed={webMode}
+              >
+                <Globe size={17} />
+              </IconToggle>
+
+              <button
+                type="button"
+                onClick={onOpenModels}
+                title="Kelola / ganti model di Model Manager"
+                className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <Boxes size={13} className="flex-none" />
+                <span className={cn("max-w-[10rem] truncate", !status.model && "text-panel-chat")}>{status.model || "Pilih model"}</span>
+              </button>
+
+              {sending ? (
+                <button type="button" onClick={stopGeneration} title="Hentikan" className="flex size-9 flex-none items-center justify-center rounded-full bg-destructive text-destructive-foreground transition hover:brightness-110">
+                  <Square size={15} className="fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  title="Kirim"
+                  className="flex size-9 flex-none items-center justify-center rounded-full bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-lg shadow-panel-chat/30 transition enabled:hover:brightness-110 disabled:opacity-40"
+                >
+                  <ArrowUp size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// IconToggle: tombol ikon kecil di composer; bisa aktif (ber-aksen) & disabled.
+function IconToggle({ children, active, accent = "chat", disabled, ...props }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className={cn(
+        "flex size-9 flex-none items-center justify-center rounded-full transition-colors",
+        active ? "bg-panel-chat/15 text-panel-chat" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground",
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+// MessageRow: satu baris pesan (user atau asisten) beserta sumber web, alur
+// berpikir, jawaban markdown, dan statistik token.
+function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScroll }) {
+  if (m.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] space-y-2">
+          {m.image && <img src={m.image} alt="lampiran" className="ml-auto max-h-64 rounded-2xl border border-border object-contain" />}
+          <div className="rounded-3xl rounded-br-md bg-panel-chat/15 px-4 py-2.5 text-sm leading-relaxed text-foreground">{m.content}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex gap-3">
+      <div className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-md shadow-panel-chat/30">
+        <Sparkles className="size-[15px]" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        {m.sources && m.sources.length > 0 && (
+          <details className="rounded-2xl border border-border bg-card/50 px-3 py-2 text-xs">
+            <summary className="flex cursor-pointer items-center gap-1.5 text-muted-foreground marker:content-none">
+              <Globe size={12} className="text-panel-chat" /> {m.sources.length} sumber web
+            </summary>
+            <ol className="mt-2 space-y-1 pl-4">
+              {m.sources.map((s) => (
+                <li key={s.index} className="list-decimal text-muted-foreground">
+                  <a href={s.url} target="_blank" rel="noreferrer" title={s.url} className="text-panel-chat hover:underline">
+                    {s.title || s.url}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
+        {m.webError && (
+          <div className="flex items-center gap-1.5 rounded-xl bg-warning/10 px-3 py-1.5 text-xs text-warning">
+            <Globe size={12} /> {m.webError} — dijawab tanpa konteks web
+          </div>
+        )}
+
+        {/* Alur berpikir (model reasoning) — sesuai setelan Pengaturan */}
+        {m.hasThink &&
+          (!thinkingEnabled ? (
+            !m.thinkDone && <ThinkPlaceholder label="memproses…" />
+          ) : thinkingMode === "hide" ? (
+            !m.thinkDone && <ThinkPlaceholder label={`berpikir… · ${fmtDuration(m.thinkSeconds)} · ${m.thinkTokens} token`} />
+          ) : !m.thinkDone ? (
+            <div className="rounded-2xl border border-panel-chat/25 bg-panel-chat/5 p-3">
+              <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-panel-chat">
+                <Loader2 className="size-3.5 animate-spin" /> berpikir… · {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
+              </div>
+              <div ref={thinkBodyRef} onScroll={onThinkScroll} className="max-h-40 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
+                {m.thinking}
+              </div>
+            </div>
+          ) : (
+            <details className="rounded-2xl border border-border bg-card/50 px-3 py-2">
+              <summary className="cursor-pointer text-xs text-muted-foreground marker:content-none">
+                Berpikir selama {fmtDuration(m.thinkSeconds)} · {m.thinkTokens} token
+              </summary>
+              <div className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{m.thinking}</div>
+            </details>
+          ))}
+
+        {m.content && <Markdown>{m.content}</Markdown>}
+
+        {m.content && m.tokens > 0 && (
+          <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+            <span>
+              {m.tokens} token{m.total ? ` · ${m.total} total` : ""}
+              {m.tps > 0 ? ` · ${m.tps} tok/s` : ""}
+            </span>
+            <CopyButton text={m.content} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ThinkPlaceholder({ label }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+      <Loader2 className="size-3.5 animate-spin text-panel-chat" /> {label}
     </div>
   );
 }
