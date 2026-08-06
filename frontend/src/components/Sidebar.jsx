@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 // di sidebar desktop maupun bottom-nav mobile. Class ditulis lengkap (bukan
 // dinamis) supaya terdeteksi Tailwind.
 export const NAV_ITEMS = [
-  { id: "chat", label: "Chat", icon: MessageSquare, accent: "chat" },
-  { id: "image", label: "Gambar", icon: ImageIcon, accent: "image" },
-  { id: "speech", label: "Suara→Teks", icon: Mic, accent: "speech" },
-  { id: "tts", label: "Teks→Suara", icon: Volume2, accent: "tts" },
-  { id: "models", label: "Model", icon: Boxes, accent: "models" },
-  { id: "system", label: "Sistem", icon: Activity, accent: "system" },
-  { id: "settings", label: "Pengaturan", icon: SettingsIcon, accent: "settings" },
+  { id: "chat", label: "Chat", short: "Chat", icon: MessageSquare, accent: "chat" },
+  { id: "image", label: "Gambar", short: "Gambar", icon: ImageIcon, accent: "image" },
+  { id: "speech", label: "Suara→Teks", short: "S→T", icon: Mic, accent: "speech" },
+  { id: "tts", label: "Teks→Suara", short: "T→S", icon: Volume2, accent: "tts" },
+  { id: "models", label: "Model", short: "Model", icon: Boxes, accent: "models" },
+  { id: "system", label: "Sistem", short: "Sistem", icon: Activity, accent: "system" },
+  { id: "settings", label: "Pengaturan", short: "Atur", icon: SettingsIcon, accent: "settings" },
 ];
 
 const ACCENT = {
@@ -61,8 +61,8 @@ export default function Sidebar({ active, onSelect }) {
 // Bottom-nav untuk layar sempit (HP). Menggantikan sidebar vertikal.
 export function BottomNav({ active, onSelect }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-0.5 overflow-x-auto border-t border-border bg-card/95 px-1.5 py-1.5 backdrop-blur md:hidden">
-      {NAV_ITEMS.map(({ id, label, icon: Icon, accent }) => {
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-0.5 border-t border-border bg-card/95 px-1 py-1.5 backdrop-blur md:hidden">
+      {NAV_ITEMS.map(({ id, short, icon: Icon, accent }) => {
         const a = ACCENT[accent];
         const on = active === id;
         return (
@@ -70,12 +70,12 @@ export function BottomNav({ active, onSelect }) {
             key={id}
             onClick={() => onSelect(id)}
             className={cn(
-              "flex min-w-[3.9rem] flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium transition-colors",
+              "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-0.5 py-1.5 text-[10px] font-medium transition-colors",
               on ? cn(a.soft, a.text) : "text-muted-foreground",
             )}
           >
-            <Icon className="size-5" />
-            <span className="max-w-full truncate">{label}</span>
+            <Icon className="size-5 flex-none" />
+            <span className="max-w-full truncate">{short}</span>
           </button>
         );
       })}

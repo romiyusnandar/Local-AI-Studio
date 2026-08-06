@@ -157,7 +157,7 @@ export default function ModelManager() {
                 key={k.id}
                 onClick={() => setKind(k.id)}
                 className={cn(
-                  "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                  "min-w-0 flex-1 truncate rounded-xl px-2 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
                   kind === k.id ? "bg-panel-models text-white shadow-md shadow-panel-models/30" : "text-muted-foreground hover:text-foreground",
                 )}
               >

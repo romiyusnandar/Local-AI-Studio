@@ -120,17 +120,22 @@ function parseLoadLine(line) {
 function parseGenLine(line) {
   if (!genState.active) return;
   const clean = stripAnsi(line);
-  if (/generate_image|generating image/i.test(clean)) {
-    genState.step = 0;
-    genState.steps = 0;
-    genState.speed = "";
-    genState.decoding = false;
-  }
+  // Catatan: JANGAN reset step/steps saat melihat "generate_image"/"generating
+  // image" — sd.cpp mencetak frasa itu juga di AKHIR ("generate_image
+  // completed"), yang akan menghapus jumlah langkah tepat sebelum disimpan ke
+  // histori. genState sudah diinisialisasi ulang di generate()/edit().
   const m = clean.match(/\|\s*[^|]*\|\s*(\d+)\/(\d+)\s*-\s*([\d.]+\s*(?:it\/s|s\/it))/);
   if (m && !genState.decoding) {
     genState.step = parseInt(m[1], 10);
     genState.steps = parseInt(m[2], 10);
     genState.speed = m[3].trim();
+    // Langkah terakhir tercapai → sampling selesai, berikutnya decode VAE.
+    // Ditandai di sini supaya fase "decoding" muncul andal tanpa bergantung
+    // pada kata spesifik di log sd.cpp.
+    if (genState.steps > 0 && genState.step >= genState.steps) {
+      genState.decoding = true;
+      genState.speed = "";
+    }
   }
   if (/decoding|vae\s*decod/i.test(clean)) {
     genState.decoding = true;
@@ -144,14 +149,16 @@ function makeSdTap(out) {
   let buf = "";
   return (chunk) => {
     buf += chunk.toString();
-    const parts = buf.split("\n");
+    // Pisah pada \r MAUPUN \n: sd.cpp memperbarui progress bar sampling dengan
+    // \r tanpa \n. Kalau hanya split \n, baris progres menumpuk di buffer dan
+    // tak pernah di-parse sampai generate selesai — akibatnya UI mentok di
+    // "Menyiapkan generate…". Segmen terakhir (belum lengkap) disimpan di buf.
+    const parts = buf.split(/\r\n|[\r\n]/);
     buf = parts.pop();
     for (const line of parts) {
-      for (const sub of line.split("\r")) {
-        if (!sub.trim()) continue;
-        parseLoadLine(sub);
-        parseGenLine(sub);
-      }
+      if (!line.trim()) continue;
+      parseLoadLine(line);
+      parseGenLine(line);
       if (SD_KEEP.test(line)) out.write(line + "\n");
     }
   };
@@ -393,9 +400,12 @@ async function proxyImageRequest(path_, body, contentType, signal) {
 export async function generate(payload, signal) {
   if (!running) throw new Error("mesin image gen sedang mati");
   genState = { active: true, step: 0, steps: 0, speed: "", decoding: false };
+  const startedAt = Date.now();
   try {
     const result = await proxyImageRequest("/v1/images/generations", JSON.stringify(payload), "application/json", signal);
-    await saveToHistory(result, { prompt: payload.prompt || "", size: payload.size || "", mode: "generate" });
+    // genState.steps masih menyimpan total langkah terakhir yang di-parse dari
+    // log sebelum di-reset; durasi diukur dari awal request sampai selesai.
+    await saveToHistory(result, { prompt: payload.prompt || "", size: payload.size || "", mode: "generate", steps: genState.steps, durationMs: Date.now() - startedAt });
     return result;
   } finally {
     resetGenState();
@@ -405,9 +415,10 @@ export async function generate(payload, signal) {
 export async function edit(formBody, contentType, signal, meta = {}) {
   if (!running) throw new Error("mesin image gen sedang mati");
   genState = { active: true, step: 0, steps: 0, speed: "", decoding: false };
+  const startedAt = Date.now();
   try {
     const result = await proxyImageRequest("/v1/images/edits", formBody, contentType, signal);
-    await saveToHistory(result, { prompt: meta.prompt || "", size: meta.size || "", mode: "edit" });
+    await saveToHistory(result, { prompt: meta.prompt || "", size: meta.size || "", mode: "edit", steps: genState.steps, durationMs: Date.now() - startedAt });
     return result;
   } finally {
     resetGenState();
@@ -428,7 +439,11 @@ async function saveToHistory({ buf, contentType }, meta) {
     await fsp.writeFile(path.join(outputsDir, file), buf);
     await fsp.writeFile(
       path.join(outputsDir, `img-${id}.json`),
-      JSON.stringify({ file, prompt: meta.prompt, size: meta.size, mode: meta.mode, model: activeModel, createdAt: Date.now() }, null, 2),
+      JSON.stringify(
+        { file, prompt: meta.prompt, size: meta.size, mode: meta.mode, model: activeModel, steps: meta.steps || 0, durationMs: meta.durationMs || 0, createdAt: Date.now() },
+        null,
+        2
+      ),
       "utf8"
     );
   } catch (err) {

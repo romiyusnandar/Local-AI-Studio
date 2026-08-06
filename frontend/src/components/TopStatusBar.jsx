@@ -52,7 +52,7 @@ export default function TopStatusBar({ onOpenSystem }) {
         <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-lg shadow-panel-chat/30">
           <Sparkles className="size-[18px]" />
         </div>
-        <span className="font-display text-base font-semibold tracking-tight sm:text-lg">Local AI Studio</span>
+        <span className="hidden font-display text-base font-semibold tracking-tight sm:inline sm:text-lg">Local AI Studio</span>
       </div>
       <div className="flex items-center gap-1 sm:gap-2">
         <Meter label="CPU" pct={perf ? perf.cpuPercent : null} visible onClick={onOpenSystem} />
