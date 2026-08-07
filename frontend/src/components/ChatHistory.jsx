@@ -103,7 +103,7 @@ export default function ChatHistory() {
                       <MessageSquare className="size-[18px]" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="truncate text-sm font-medium text-foreground">{c.title || "Chat baru"}</span>
+                      <span className="block truncate text-sm font-medium text-foreground">{c.title || "Chat baru"}</span>
                       {c.preview && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{c.preview}</span>}
                     </span>
                   </button>
