@@ -98,4 +98,10 @@ export const Api = {
   imgGeneration: () => j("/api/img/generation"),
   imgHistory: () => j("/api/img/history"),
   imgDeleteHistory: (file) => post("/api/img/history/delete", { file }),
+
+  // Riwayat chat (disimpan lokal sebagai JSON di server).
+  listChats: () => j("/api/chats"),
+  getChat: (id) => j(`/api/chats/get?id=${encodeURIComponent(id)}`),
+  saveChat: (payload) => post("/api/chats/save", payload),
+  deleteChat: (id) => post("/api/chats/delete", { id }),
 };

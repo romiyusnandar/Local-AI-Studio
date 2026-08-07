@@ -26,6 +26,9 @@ frontend/dist/
 # Hasil generate
 /app/outputs/
 
+# Riwayat chat (JSON per percakapan)
+/app/chats/
+
 # Cache pencarian web
 /app/cache/
 

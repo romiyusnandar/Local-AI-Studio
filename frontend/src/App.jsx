@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import TopStatusBar from "./components/TopStatusBar.jsx";
 import Sidebar, { BottomNav } from "./components/Sidebar.jsx";
 import Chat from "./components/Chat.jsx";
+import ChatHistory from "./components/ChatHistory.jsx";
 import ImageGen from "./components/ImageGen.jsx";
 import Speech from "./components/Speech.jsx";
 import TextToSpeech from "./components/TextToSpeech.jsx";
@@ -34,7 +35,8 @@ function Shell() {
           <main className="min-w-0 flex-1 overflow-hidden pb-[4.5rem] md:pb-0">
             <Routes>
               <Route path="/" element={<Navigate to="/chat" replace />} />
-              <Route path="/chat" element={<Chat onOpenModels={() => openModels("llm")} />} />
+              <Route path="/chat" element={<ChatHistory />} />
+              <Route path="/chat/:id" element={<Chat onOpenModels={() => openModels("llm")} />} />
               <Route path="/image" element={<ImageGen onOpenModels={() => openModels("img")} />} />
               <Route path="/speech" element={<Speech onOpenModels={() => openModels("stt")} />} />
               <Route path="/tts" element={<TextToSpeech onOpenModels={() => openModels("tts")} />} />

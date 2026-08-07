@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, ArrowUp, X, Square, Globe, Sparkles, Boxes, Copy, Check, Loader2 } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Paperclip, ArrowUp, X, Square, Globe, Sparkles, Boxes, Copy, Check, Loader2, Plus } from "lucide-react";
 import { Api } from "../services/api.js";
 import { engineStatusText } from "../lib/status.js";
 import Markdown from "./Markdown.jsx";
-import { cn } from "@/lib/utils";
+import { cn, newId } from "@/lib/utils";
 
 // resizeImageToDataUrl memperkecil gambar (sisi terpanjang ≤ maxDim) sebelum
 // dikirim ke model vision. Gambar besar diubah jadi ratusan/ribuan "token
@@ -79,6 +80,8 @@ function CopyButton({ text }) {
 }
 
 export default function Chat({ onOpenModels }) {
+  const { id: chatId } = useParams();
+  const navigate = useNavigate();
   const [status, setStatus] = useState({ mesinHidup: false, model: "" });
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -98,6 +101,53 @@ export default function Chat({ onOpenModels }) {
   const pinnedRef = useRef(true); // true = ikuti stream ke bawah otomatis
   const thinkBodyRef = useRef(null); // kotak reasoning live (scroll internal)
   const thinkPinnedRef = useRef(true); // ikuti stream di dalam kotak reasoning
+  const messagesRef = useRef([]); // salinan messages terbaru untuk dipakai di handler async
+  const dirtyRef = useRef(false); // true = ada perubahan dari user yang perlu disimpan
+  const tokensRef = useRef(0); // total token kumulatif chat (sumber kebenaran, dimirror ke state)
+
+  // Simpan messages terbaru di ref supaya bisa dipersist tanpa stale closure.
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Muat percakapan sesuai id di URL (/chat/:id). Tiap ganti id: reset state,
+  // lalu ambil dari server. dirtyRef=false supaya sekadar membuka chat TIDAK
+  // memicu autosave (yang akan menaikkan updatedAt tanpa perubahan nyata).
+  useEffect(() => {
+    dirtyRef.current = false;
+    setMessages([]);
+    tokensRef.current = 0;
+    setSessionTokens(0);
+    carriedWebRef.current = "";
+    if (!chatId) return;
+    let cancelled = false;
+    Api.getChat(chatId)
+      .then((c) => {
+        if (cancelled || !c) return;
+        if (Array.isArray(c.messages)) setMessages(c.messages);
+        // Pulihkan total token tersimpan supaya lanjutan percakapan menambah,
+        // bukan menghitung ulang dari nol.
+        tokensRef.current = c.tokens || 0;
+        setSessionTokens(tokensRef.current);
+      })
+      .catch(() => {
+        // chat baru (belum tersimpan) → biarkan kosong
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]);
+
+  // Autosave (debounced): tulis ke server saat ada perubahan dari user. Selama
+  // streaming, messages berubah terus sehingga timeout ke-reset dan baru
+  // menyimpan ketika stream jeda/selesai — hemat tulis.
+  useEffect(() => {
+    if (!chatId || !dirtyRef.current || messages.length === 0) return;
+    const t = setTimeout(() => {
+      Api.saveChat({ id: chatId, messages, tokens: tokensRef.current }).catch(() => {});
+    }, 700);
+    return () => clearTimeout(t);
+  }, [messages, chatId]);
 
   // onBodyScroll menandai apakah pengguna sedang menempel di bawah. Kalau
   // mereka scroll ke atas (untuk membaca), auto-scroll berhenti; begitu
@@ -200,6 +250,7 @@ export default function Chat({ onOpenModels }) {
     setAttachedImage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setSending(true);
+    dirtyRef.current = true; // ada pesan baru → perlu disimpan
     pinnedRef.current = true; // kirim pesan baru → selalu ikuti ke bawah
     thinkPinnedRef.current = true; // reasoning baru → ikuti dari awal
 
@@ -361,7 +412,10 @@ export default function Chat({ onOpenModels }) {
       }
       pushUpdate();
       const used = usage ? usage.total_tokens : tokenCount;
-      if (used) setSessionTokens((n) => n + used);
+      if (used) {
+        tokensRef.current += used; // ref sebagai sumber kebenaran (dipakai saat persist)
+        setSessionTokens(tokensRef.current);
+      }
     } catch (err) {
       if (err.name !== "AbortError") {
         setMessages((prev) => {
@@ -373,6 +427,11 @@ export default function Chat({ onOpenModels }) {
     } finally {
       setSending(false);
       abortRef.current = null;
+      // Simpan langsung setelah generasi selesai — jaring pengaman kalau user
+      // segera pindah halaman (yang membatalkan autosave debounced saat unmount).
+      if (chatId && messagesRef.current.length > 0) {
+        Api.saveChat({ id: chatId, messages: messagesRef.current, tokens: tokensRef.current }).catch(() => {});
+      }
     }
   }
 
@@ -408,11 +467,20 @@ export default function Chat({ onOpenModels }) {
             </div>
           )}
         </div>
-        {sessionTokens > 0 && (
-          <span className="flex-none rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title="Total token sesi ini">
-            Σ {sessionTokens.toLocaleString()}
-          </span>
-        )}
+        <div className="flex flex-none items-center gap-2">
+          {sessionTokens > 0 && (
+            <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title="Total token percakapan ini">
+              Σ {sessionTokens.toLocaleString()}
+            </span>
+          )}
+          <button
+            onClick={() => navigate(`/chat/${newId()}`)}
+            title="Mulai chat baru"
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-panel-chat/50 hover:bg-accent"
+          >
+            <Plus size={14} /> Chat baru
+          </button>
+        </div>
       </header>
 
       {/* ---- daftar pesan ---- */}
@@ -420,10 +488,10 @@ export default function Chat({ onOpenModels }) {
         <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 px-4 py-6">
           {messages.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-xl shadow-panel-chat/30">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-linear-to-br from-panel-chat to-panel-image text-white shadow-xl shadow-panel-chat/30">
                 <Sparkles className="size-7" />
               </div>
-              <h2 className="bg-gradient-to-r from-panel-chat to-panel-image bg-clip-text text-2xl font-bold text-transparent">Halo! Mau ngobrol apa?</h2>
+              <h2 className="bg-linear-to-r from-panel-chat to-panel-image bg-clip-text text-2xl font-bold text-transparent">Halo! Mau ngobrol apa?</h2>
               <p className="max-w-xs text-sm text-muted-foreground">Pilih model lewat pill di bawah, lalu tulis pesanmu. Bisa lampirkan gambar (model vision) atau cari di web.</p>
             </div>
           ) : (
@@ -458,7 +526,7 @@ export default function Chat({ onOpenModels }) {
             <textarea
               ref={taRef}
               rows={1}
-              placeholder="Tulis pesan… (Enter untuk kirim, Shift+Enter baris baru)"
+              placeholder="Tulis pesan…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
@@ -502,7 +570,7 @@ export default function Chat({ onOpenModels }) {
                   type="submit"
                   disabled={!input.trim()}
                   title="Kirim"
-                  className="flex size-9 flex-none items-center justify-center rounded-full bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-lg shadow-panel-chat/30 transition enabled:hover:brightness-110 disabled:opacity-40"
+                  className="flex size-9 flex-none items-center justify-center rounded-full bg-linear-to-br from-panel-chat to-panel-image text-white shadow-lg shadow-panel-chat/30 transition enabled:hover:brightness-110 disabled:opacity-40"
                 >
                   <ArrowUp size={18} />
                 </button>
@@ -549,7 +617,7 @@ function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScr
 
   return (
     <div className="group flex gap-3">
-      <div className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-panel-chat to-panel-image text-white shadow-md shadow-panel-chat/30">
+      <div className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-xl bg-linear-to-br from-panel-chat to-panel-image text-white shadow-md shadow-panel-chat/30">
         <Sparkles className="size-[15px]" />
       </div>
       <div className="min-w-0 flex-1 space-y-2">

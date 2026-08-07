@@ -15,6 +15,7 @@ import { getStats } from "./lib/perf.js";
 import { installedAccelIn } from "./lib/backend-manager.js";
 import { augmentMessagesWithWebSearch } from "./lib/websearch.js";
 import * as settings from "./lib/settings.js";
+import * as chatStore from "./lib/chat-store.js";
 import { makeEngineRoutes, sendJson } from "./lib/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -462,6 +463,41 @@ async function handleImgHistoryDelete(req, res) {
   }
 }
 
+// ---------- handler Riwayat Chat (simpan/muat percakapan sebagai JSON lokal) ----------
+
+async function handleChatGet(req, res) {
+  const id = new URL(req.url, "http://localhost").searchParams.get("id");
+  const chat = await chatStore.getChat(id || "");
+  if (!chat) return sendJson(res, 404, { error: "chat tidak ditemukan" });
+  sendJson(res, 200, chat);
+}
+
+async function handleChatSave(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    const saved = await chatStore.saveChat({ id: body.id, messages: body.messages, title: body.title, tokens: body.tokens });
+    sendJson(res, 200, saved);
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
+}
+
+async function handleChatDelete(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "gunakan POST" });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+    await chatStore.deleteChat(body.id);
+    sendJson(res, 200, { ok: true });
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
+}
+
 // ---------- routing ----------
 
 const llmRoutes = makeEngineRoutes(llm);
@@ -513,6 +549,11 @@ const routes = {
   "/api/img/models/download": imgRoutes.download,
   "/api/img/models/cancel": imgRoutes.cancel,
   "/api/img/models/delete": imgRoutes.delete,
+
+  "/api/chats": (req, res) => chatStore.listChats().then((items) => sendJson(res, 200, { items })),
+  "/api/chats/get": handleChatGet,
+  "/api/chats/save": handleChatSave,
+  "/api/chats/delete": handleChatDelete,
 
   "/api/progress": (req, res) => sendJson(res, 200, getProgress()),
 
