@@ -558,7 +558,7 @@ export default function Chat({ onOpenModels }) {
                 className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 <Boxes size={13} className="flex-none" />
-                <span className={cn("max-w-[10rem] truncate", !status.model && "text-panel-chat")}>{status.model || "Pilih model"}</span>
+                <span className={cn("max-w-40 truncate", !status.model && "text-panel-chat")}>{status.model || "Pilih model"}</span>
               </button>
 
               {sending ? (
@@ -618,7 +618,7 @@ function MessageRow({ m, thinkingEnabled, thinkingMode, thinkBodyRef, onThinkScr
   return (
     <div className="group flex gap-3">
       <div className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-xl bg-linear-to-br from-panel-chat to-panel-image text-white shadow-md shadow-panel-chat/30">
-        <Sparkles className="size-[15px]" />
+        <Sparkles className="size-3.75" />
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         {m.webSearching && (

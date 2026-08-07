@@ -119,22 +119,25 @@ export default function Settings() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl space-y-5 px-4 py-5">
+        <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
           {!settings ? (
             <div className="rounded-2xl border border-dashed border-border bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">Memuat pengaturan…</div>
           ) : (
             <>
               {/* ---- Chat ---- */}
-              <section className="space-y-6 rounded-3xl border border-border bg-card p-5">
-                <SectionTitle icon={MessageSquare} color="text-panel-chat">Chat</SectionTitle>
-
-                <Field label="Brave Search API Key">
-                  <Help>
-                    Opsional — bikin mode web lebih andal. Tanpa key tetap jalan (scraping).{" "}
-                    <a href="https://api-dashboard.search.brave.com/register" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-panel-chat hover:underline">
-                      Dapatkan key <ExternalLink size={11} />
-                    </a>
-                  </Help>
+              <Section icon={MessageSquare} accent="chat" title="Chat">
+                <Row
+                  stacked
+                  label="Brave Search API Key"
+                  desc={
+                    <>
+                      Opsional — bikin mode web lebih andal. Tanpa key tetap jalan (scraping).{" "}
+                      <a href="https://api-dashboard.search.brave.com/register" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-panel-chat hover:underline">
+                        Dapatkan key <ExternalLink size={11} />
+                      </a>
+                    </>
+                  }
+                >
                   {settings.braveApiKeySet ? (
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-xs font-medium text-success">
@@ -159,79 +162,81 @@ export default function Settings() {
                       </button>
                     </div>
                   )}
-                </Field>
+                </Row>
 
-                <Field label="Mode berpikir model">
-                  <Help>Untuk model reasoning — berpikir dulu, atau langsung menjawab.</Help>
-                  <div className="flex items-center gap-3">
+                <Row label="Mode berpikir model" desc="Untuk model reasoning — berpikir dulu, atau langsung menjawab.">
+                  <label className="flex cursor-pointer items-center gap-3">
                     <Switch checked={settings.thinkingEnabled} onCheckedChange={(v) => patchSettings({ thinkingEnabled: v })} />
                     <span className="font-mono text-xs text-muted-foreground">{settings.thinkingEnabled ? "Aktif" : "Nonaktif"}</span>
-                  </div>
-                </Field>
+                  </label>
+                </Row>
 
                 {settings.thinkingEnabled && (
-                  <Field label="Tampilan alur berpikir">
-                    <Help>Tampilkan alur berpikirnya, atau cukup indikator "berpikir…".</Help>
+                  <Row label="Tampilan alur berpikir" desc='Tampilkan alur berpikirnya, atau cukup indikator "berpikir…".'>
                     <Select value={settings.thinkingMode} onChange={(e) => patchSettings({ thinkingMode: e.target.value })} accent="chat">
                       <option value="show">Tampilkan alur berpikir</option>
                       <option value="hide">Sembunyikan (hanya "berpikir…")</option>
                     </Select>
-                  </Field>
+                  </Row>
                 )}
 
-                <Field label="Context window (n_ctx)">
-                  <Help>Token maks per percakapan. Lebih besar = butuh RAM/VRAM lebih. Mengubah model aktif me-restart mesin.</Help>
+                <Row
+                  stacked
+                  label="Context window (n_ctx)"
+                  desc="Token maks per percakapan. Lebih besar = butuh RAM/VRAM lebih. Mengubah model aktif me-restart mesin."
+                >
+                  <div className="overflow-hidden rounded-2xl border border-border">
+                    <CtxLine>
+                      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">Default (semua model)</span>
+                      <CtxInput
+                        value={ctxDraft.__default ?? ""}
+                        onChange={(e) => setDraft("__default", e.target.value)}
+                        onBlur={commitDefaultCtx}
+                        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                      />
+                      <span className="w-8 flex-none font-mono text-[11px] text-muted-foreground">token</span>
+                    </CtxLine>
 
-                  <CtxRow>
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">Default (semua model)</span>
-                    <CtxInput
-                      value={ctxDraft.__default ?? ""}
-                      onChange={(e) => setDraft("__default", e.target.value)}
-                      onBlur={commitDefaultCtx}
-                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                    />
-                    <span className="w-9 flex-none font-mono text-[11px] text-muted-foreground">token</span>
-                  </CtxRow>
-
-                  {chatModels.length > 0 && (
-                    <>
-                      <div className="pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Override per model</div>
-                      {chatModels.map((f) => (
-                        <CtxRow key={f}>
-                          <span className="flex min-w-0 flex-1 items-center gap-2 text-xs" title={f}>
-                            <span className="truncate">{f}</span>
-                            {f === activeModel && <span className="flex-none rounded-full bg-panel-chat/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-panel-chat">aktif</span>}
-                            {ctxLimits[f] > 0 && <span className="flex-none rounded-full border border-border px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">maks {ctxLimits[f].toLocaleString("id-ID")}</span>}
-                          </span>
-                          <CtxInput
-                            max={ctxLimits[f] || undefined}
-                            placeholder={`${settings.contextSizeDefault}`}
-                            value={ctxDraft[f] ?? ""}
-                            onChange={(e) => setDraft(f, e.target.value)}
-                            onBlur={() => commitModelCtx(f)}
-                            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                          />
-                          <span className="w-9 flex-none font-mono text-[11px] text-muted-foreground">token</span>
-                        </CtxRow>
-                      ))}
-                      <Help>Kosongkan = pakai default. Badge <b className="text-foreground">maks</b> = batas context model.</Help>
-                    </>
-                  )}
-                </Field>
-              </section>
+                    {chatModels.length > 0 && (
+                      <>
+                        <div className="bg-muted/40 px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Override per model</div>
+                        {chatModels.map((f) => (
+                          <CtxLine key={f}>
+                            <span className="flex min-w-0 flex-1 items-center gap-2 text-xs" title={f}>
+                              <span className="truncate">{f}</span>
+                              {f === activeModel && <span className="flex-none rounded-full bg-panel-chat/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-panel-chat">aktif</span>}
+                              {ctxLimits[f] > 0 && <span className="hidden flex-none rounded-full border border-border px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground sm:inline">maks {ctxLimits[f].toLocaleString("id-ID")}</span>}
+                            </span>
+                            <CtxInput
+                              max={ctxLimits[f] || undefined}
+                              placeholder={`${settings.contextSizeDefault}`}
+                              value={ctxDraft[f] ?? ""}
+                              onChange={(e) => setDraft(f, e.target.value)}
+                              onBlur={() => commitModelCtx(f)}
+                              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                            />
+                            <span className="w-8 flex-none font-mono text-[11px] text-muted-foreground">token</span>
+                          </CtxLine>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    Kosongkan = pakai default. Badge <b className="text-foreground">maks</b> = batas context model.
+                  </p>
+                </Row>
+              </Section>
 
               {/* ---- Gambar ---- */}
-              <section className="space-y-6 rounded-3xl border border-border bg-card p-5">
-                <SectionTitle icon={ImageIcon} color="text-panel-image">Gambar</SectionTitle>
-                <Field label="Ukuran gambar default">
-                  <Help>Dipakai di panel Gambar.</Help>
+              <Section icon={ImageIcon} accent="image" title="Gambar">
+                <Row label="Ukuran gambar default" desc="Dipakai di panel Gambar.">
                   <Select value={settings.imageSize} onChange={(e) => changeImageSize(e.target.value)} accent="image">
                     <option value="512x512">512 × 512</option>
                     <option value="768x768">768 × 768</option>
                     <option value="1024x1024">1024 × 1024</option>
                   </Select>
-                </Field>
-              </section>
+                </Row>
+              </Section>
             </>
           )}
         </div>
@@ -240,26 +245,40 @@ export default function Settings() {
   );
 }
 
-function SectionTitle({ icon: Icon, color, children }) {
+const ACCENT = {
+  chat: "bg-panel-chat/15 text-panel-chat",
+  image: "bg-panel-image/15 text-panel-image",
+};
+
+// Section: kartu satu mesin — header (ikon ber-badge + judul) lalu daftar baris
+// setelan yang dipisah divider.
+function Section({ icon: Icon, accent = "chat", title, children }) {
   return (
-    <div className="flex items-center gap-2 text-sm font-semibold">
-      <Icon className={cn("size-4", color)} />
-      <span>{children}</span>
-    </div>
+    <section className="overflow-hidden rounded-3xl border border-border bg-card">
+      <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
+        <span className={cn("flex size-8 flex-none items-center justify-center rounded-xl", ACCENT[accent])}>
+          <Icon className="size-4" />
+        </span>
+        <h2 className="text-sm font-semibold">{title}</h2>
+      </div>
+      <div className="divide-y divide-border px-5">{children}</div>
+    </section>
   );
 }
 
-function Field({ label, children }) {
+// Row: satu setelan. Default = label/deskripsi di kiri, kontrol di kanan
+// (menumpuk di mobile). stacked = kontrol full-width di bawah label (untuk
+// input panjang seperti API key & tabel context window).
+function Row({ label, desc, children, stacked }) {
   return (
-    <div className="space-y-2.5">
-      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      {children}
+    <div className={cn("py-4", stacked ? "space-y-3" : "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6")}>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {desc && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>}
+      </div>
+      <div className={cn(!stacked && "flex-none")}>{children}</div>
     </div>
   );
-}
-
-function Help({ children }) {
-  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
 }
 
 function Select({ accent = "chat", className, ...props }) {
@@ -275,8 +294,9 @@ function Select({ accent = "chat", className, ...props }) {
   );
 }
 
-function CtxRow({ children }) {
-  return <div className="flex items-center gap-2.5">{children}</div>;
+// CtxLine: satu baris di tabel context window (dipisah garis, gap konsisten).
+function CtxLine({ children }) {
+  return <div className="flex items-center gap-3 border-b border-border px-3.5 py-2.5 last:border-b-0">{children}</div>;
 }
 
 function CtxInput(props) {
@@ -286,7 +306,7 @@ function CtxInput(props) {
       min={512}
       step={512}
       {...props}
-      className="w-28 flex-none rounded-xl border border-border bg-background px-3 py-1.5 text-right font-mono text-sm outline-none transition-colors focus:border-panel-chat/60"
+      className="w-24 flex-none rounded-lg border border-border bg-background px-2.5 py-1.5 text-right font-mono text-sm outline-none transition-colors focus:border-panel-chat/60 sm:w-28"
     />
   );
 }
