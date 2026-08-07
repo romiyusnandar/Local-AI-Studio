@@ -1,5 +1,5 @@
 {
-  "version": "b10280",
+  "version": "b10305",
   "backends": [
     {
       "os": "windows",
@@ -43,6 +43,13 @@
       "os": "darwin",
       "accel": "metal",
       "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-macos-arm64.tar.gz",
+      "entrypoint": "llama-server"
+    },
+    {
+      "os": "android",
+      "arch": "arm64",
+      "accel": "cpu",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/{version}/llama-{version}-bin-android-arm64.tar.gz",
       "entrypoint": "llama-server"
     }
   ]

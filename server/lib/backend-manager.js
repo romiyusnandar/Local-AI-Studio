@@ -76,6 +76,10 @@ async function hasVulkan() {
 // NVIDIA pun mendukung Vulkan), lalu CPU. macOS pakai Metal.
 export async function detectAccel() {
   if (process.platform === "darwin") return "metal";
+  // Android (mis. lewat Termux): build resmi llama.cpp hanya CPU (ARM NEON/
+  // dotprod/i8mm) — tidak ada CUDA, dan probe nvidia-smi/vulkaninfo tidak
+  // relevan. Langsung CPU supaya tidak menjalankan probe yang sia-sia.
+  if (process.platform === "android") return "cpu";
   if (process.platform === "win32") {
     const cuda = await nvidiaCudaVersion();
     if (cuda >= 13) return "cuda-13";
@@ -88,6 +92,8 @@ export async function detectAccel() {
 function currentOS() {
   if (process.platform === "win32") return "windows";
   if (process.platform === "darwin") return "darwin";
+  // Node di Android (Termux) melaporkan process.platform === "android".
+  if (process.platform === "android") return "android";
   return "linux";
 }
 
@@ -117,6 +123,9 @@ export function pickBackend(manifest, accel) {
   let safe = null;
   for (const entry of manifest.backends) {
     if (entry.os !== os) continue;
+    // Cocokkan arsitektur bila entri menyebutnya (mis. android-arm64). Entri
+    // tanpa field arch dianggap cocok semua (perilaku lama x64 tak berubah).
+    if (entry.arch && entry.arch !== process.arch) continue;
     if (entry.accel === accel) return entry;
     if (entry.accel === "vulkan") vulkan = entry;
     if (entry.accel === "cpu" || entry.accel === "metal") safe = entry;
